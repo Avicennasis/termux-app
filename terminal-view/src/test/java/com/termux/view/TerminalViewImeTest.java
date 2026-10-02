@@ -232,6 +232,55 @@ public class TerminalViewImeTest {
     }
 
     @Test
+    public void discardedBindingProbeDoesNotCloseTheConnectionAndroidKeeps() {
+        InputConnection bound = predictive();
+        bound.setComposingText("old", 1);
+        EditorInfo info = new EditorInfo();
+        InputConnection probe = view.onCreateInputConnection(info);
+        assertEquals(3, info.initialSelStart);
+        assertEquals(3, info.initialSelEnd);
+        assertEquals("", output(session));
+        // Android's BOUND_TO_IMMS path can discard probe and continue using bound.
+        assertTrue(bound.setComposingText("word", 1));
+        assertEquals("word", probe.getTextBeforeCursor(100, 0).toString());
+        assertTrue(bound.commitText("word ", 1));
+        assertEquals("word ", output(session));
+        assertTrue(bound.finishComposingText());
+        assertEquals("", output(session));
+    }
+
+    @Test
+    public void replacingBindingTransfersDraftWithoutFlushingOrClearingOnOldClose() {
+        InputConnection old = predictive();
+        old.setComposingText("mistake", 1);
+        InputConnection fresh = view.onCreateInputConnection(new EditorInfo());
+        ((TerminalInputConnection) old).closeConnection();
+        assertEquals("", output(session));
+        assertEquals("mistake", fresh.getTextBeforeCursor(100, 0).toString());
+        assertFalse(old.commitText("late", 1));
+        assertTrue(fresh.setComposingText("corrected", 1));
+        assertTrue(fresh.finishComposingText());
+        assertEquals("corrected", output(session));
+        assertEquals("", output(session));
+    }
+
+    @Test
+    public void focusRetirementInvalidatesEveryConnectionIncludingDiscardedProbes() {
+        InputConnection bound = predictive();
+        bound.setComposingText("word", 1);
+        InputConnection probe = view.onCreateInputConnection(new EditorInfo());
+        view.onWindowFocusChanged(false);
+        assertEquals("word", output(session));
+        assertFalse(bound.commitText("late", 1));
+        assertFalse(probe.commitText("late", 1));
+        InputConnection fresh = predictive();
+        // The same session is selected, but callbacks from the retired generation stay stale.
+        assertFalse(bound.setComposingText("late", 1));
+        assertTrue(fresh.commitText("fresh ", 1));
+        assertEquals("fresh ", output(session));
+    }
+
+    @Test
     public void rapidPropertyReloadsRetireDraftAndRestoreDefaultMode() {
         for (int i = 0; i < 10; i++) {
             InputConnection old = predictive();
