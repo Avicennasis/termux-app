@@ -110,6 +110,11 @@ extra keys together in portrait, landscape, split-screen, floating-keyboard, and
 one-handed layouts; automated tests cannot establish that a particular keyboard
 reports correct insets.
 
+A floating keyboard controls its own window position and may cover terminal
+controls, including the extra-keys toolbar, in either input mode. Move it clear
+of those controls or return to the keyboard's docked layout. This mode cannot
+reserve screen space for a floating window that reports no IME resize inset.
+
 A commented configuration sample is available in
 [terminal-ime-suggestions.properties](terminal-ime-suggestions.properties).
 
