@@ -266,6 +266,70 @@ public final class TerminalRenderer {
         if (savedMatrix) canvas.restore();
     }
 
+    /**
+     * Preview ONLY unsent IME input. Like the composing-span model in termux/termux-app#5242,
+     * the cursor offset is an Editable selection, never a guess about the PTY cursor.
+     * Reuse the normal text/font/width renderer, and wrap within the terminal view so long
+     * words cannot cover the extra-key toolbar. Output only changes the drawing anchor.
+     */
+    void renderImeDraft(TerminalEmulator emulator, Canvas canvas, int topRow,
+                        CharSequence draft, int cursorOffset) {
+        if (draft.length() == 0) return;
+        int row = emulator.getCursorRow() - topRow;
+        int column = emulator.getCursorCol();
+        if (row < 0 || row >= emulator.mRows) return;
+        int[] palette = emulator.mColors.mCurrentColors;
+        long style = emulator.getScreen().getStyleAt(emulator.getCursorRow(), column)
+            | TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE;
+        if (TextStyle.isTerminalBitmap(style)) return;
+        char[] text = draft.toString().toCharArray();
+        canvas.save();
+        canvas.clipRect(0, 0, emulator.mColumns * mFontWidth,
+            mFontLineSpacingAndAscent + emulator.mRows * mFontLineSpacing);
+        for (int i = 0; i < text.length && row < emulator.mRows; ) {
+            int start = i;
+            int cp = Character.codePointAt(text, i);
+            i += Character.charCount(cp);
+            int width = Math.max(1, WcWidth.width(cp));
+            // Keep combining marks with the preceding glyph and its measured font run.
+            while (i < text.length && WcWidth.width(Character.codePointAt(text, i)) == 0)
+                i += Character.charCount(Character.codePointAt(text, i));
+            if (column + width > emulator.mColumns) {
+                row++;
+                column = 0;
+                if (row >= emulator.mRows) break;
+            }
+            float y = mFontLineSpacingAndAscent + (row + 1) * mFontLineSpacing;
+            boolean reversed = emulator.isReverseVideo()
+                ^ ((TextStyle.decodeEffect(style) & TextStyle.CHARACTER_ATTRIBUTE_INVERSE) != 0);
+            int background = reversed ? TextStyle.decodeForeColor(style) : TextStyle.decodeBackColor(style);
+            if ((background & 0xff000000) != 0xff000000) background = palette[background];
+            mTextPaint.setColor(background);
+            canvas.drawRect(column * mFontWidth, y - mFontLineSpacing,
+                (column + width) * mFontWidth, y, mTextPaint);
+            float measured = mTextPaint.measureText(text, start, i - start);
+            if (measured > 0) drawTextRun(canvas, text, palette, y, column, width, start, i - start,
+                measured, 0, 0, style, emulator.isReverseVideo());
+            if (cursorOffset >= start && cursorOffset < i) drawImeCursor(canvas, palette, column, y);
+            column += width;
+        }
+        if (cursorOffset == text.length && row < emulator.mRows) {
+            if (column == emulator.mColumns && row + 1 < emulator.mRows) {
+                row++;
+                column = 0;
+            }
+            drawImeCursor(canvas, palette, Math.min(column, emulator.mColumns - 1),
+                mFontLineSpacingAndAscent + (row + 1) * mFontLineSpacing);
+        }
+        canvas.restore();
+    }
+
+    private void drawImeCursor(Canvas canvas, int[] palette, int column, float y) {
+        float x = column * mFontWidth;
+        mTextPaint.setColor(palette[TextStyle.COLOR_INDEX_CURSOR]);
+        canvas.drawRect(x, y - mFontLineSpacing, x + Math.max(1, mFontWidth * 0.12f), y, mTextPaint);
+    }
+
     public float getFontWidth() {
         return mFontWidth;
     }

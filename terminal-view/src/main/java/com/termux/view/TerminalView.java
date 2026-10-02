@@ -7,6 +7,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
@@ -14,6 +15,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
+import android.text.Selection;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.ActionMode;
@@ -32,6 +34,7 @@ import android.view.autofill.AutofillValue;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Scroller;
 
 import androidx.annotation.Nullable;
@@ -56,6 +59,12 @@ public final class TerminalView extends View {
     public TerminalRenderer mRenderer;
 
     public TerminalViewClient mClient;
+
+    private TerminalInputConnection mPredictiveInputConnection;
+    private boolean mDispatchingImeInput;
+    private boolean mWritingImeDraft;
+    private boolean mLastImeSuggestionsEnabled;
+    private boolean mImeRestartPending;
 
     private TextSelectionCursorController mTextSelectionCursorController;
 
@@ -290,6 +299,9 @@ public final class TerminalView extends View {
     public boolean attachSession(TerminalSession session) {
         if (session == mTermSession) return false;
 
+        // Finish against the OLD session and retire its connection before changing targets.
+        finishImeInput();
+
         mTermSession = session;
         mEmulator = null;
         mCombiningAccent = 0;
@@ -306,7 +318,73 @@ public final class TerminalView extends View {
     }
 
     @Override
+    @SuppressLint("InlinedApi") // NO_PERSONALIZED_LEARNING is an inlined flag, safely ignored by older IMEs.
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+        closePredictiveInputConnection();
+        mLastImeSuggestionsEnabled = shouldEnableImeSuggestions();
+        if (mLastImeSuggestionsEnabled) {
+            outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL
+                | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;
+            outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                | EditorInfo.IME_FLAG_NO_ENTER_ACTION | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
+            outAttrs.initialSelStart = outAttrs.initialSelEnd = 0;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outAttrs.setInitialSurroundingText("");
+            final TerminalSession session = mTermSession;
+            mPredictiveInputConnection = TerminalInputConnection.create(this, new TerminalInputConnection.Target() {
+                @Override
+                public boolean isValid() {
+                    return mPredictiveInputConnection != null && mTermSession == session && mEmulator != null;
+                }
+
+                @Override
+                public boolean hasModifiers() {
+                    return mClient.hasTerminalInputModifiers();
+                }
+
+                @Override
+                public void writeText(CharSequence text, boolean applyModifiers) {
+                    boolean wasDispatching = mDispatchingImeInput;
+                    boolean wasWritingDraft = mWritingImeDraft;
+                    mDispatchingImeInput = true;
+                    mWritingImeDraft = !applyModifiers;
+                    try {
+                        sendTextToTerminal(text, applyModifiers);
+                    } finally {
+                        mDispatchingImeInput = wasDispatching;
+                        mWritingImeDraft = wasWritingDraft;
+                    }
+                }
+
+                @Override
+                public boolean sendKeyEvent(KeyEvent event) {
+                    mDispatchingImeInput = true;
+                    try {
+                        return event.getAction() == KeyEvent.ACTION_UP
+                            ? onKeyUp(event.getKeyCode(), event) : onKeyDown(event.getKeyCode(), event);
+                    } finally {
+                        mDispatchingImeInput = false;
+                    }
+                }
+
+                @Override
+                public void onStateChanged() {
+                    if (mPredictiveInputConnection == null) return;
+                    Editable draft = mPredictiveInputConnection.getEditable();
+                    InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.updateSelection(TerminalView.this, Selection.getSelectionStart(draft),
+                        Selection.getSelectionEnd(draft), BaseInputConnection.getComposingSpanStart(draft),
+                        BaseInputConnection.getComposingSpanEnd(draft));
+                    invalidate();
+                }
+
+                @Override
+                public void restartInput() {
+                    closePredictiveInputConnection();
+                    requestImeRestart();
+                }
+            });
+            return mPredictiveInputConnection;
+        }
         // Ensure that inputType is only set if TerminalView is selected view with the keyboard and
         // an alternate view is not selected, like an EditText. This is necessary if an activity is
         // initially started with the alternate view or if activity is returned to from another app
@@ -344,17 +422,17 @@ public final class TerminalView extends View {
 
             @Override
             public boolean finishComposingText() {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
+                if (shouldLogTerminalInput()) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
                 super.finishComposingText();
 
-                sendTextToTerminal(getEditable());
+                sendTextToTerminal(getEditable(), true);
                 getEditable().clear();
                 return true;
             }
 
             @Override
             public boolean commitText(CharSequence text, int newCursorPosition) {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
+                if (shouldLogTerminalInput()) {
                     mClient.logInfo(LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
                 }
                 super.commitText(text, newCursorPosition);
@@ -362,14 +440,14 @@ public final class TerminalView extends View {
                 if (mEmulator == null) return true;
 
                 Editable content = getEditable();
-                sendTextToTerminal(content);
+                sendTextToTerminal(content, true);
                 content.clear();
                 return true;
             }
 
             @Override
             public boolean deleteSurroundingText(int leftLength, int rightLength) {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
+                if (shouldLogTerminalInput()) {
                     mClient.logInfo(LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
                 }
                 // The stock Samsung keyboard with 'Auto check spelling' enabled sends leftLength > 1.
@@ -378,63 +456,133 @@ public final class TerminalView extends View {
                 return super.deleteSurroundingText(leftLength, rightLength);
             }
 
-            void sendTextToTerminal(CharSequence text) {
-                stopTextSelectionMode();
-                final int textLengthInChars = text.length();
-                for (int i = 0; i < textLengthInChars; i++) {
-                    char firstChar = text.charAt(i);
-                    int codePoint;
-                    if (Character.isHighSurrogate(firstChar)) {
-                        if (++i < textLengthInChars) {
-                            codePoint = Character.toCodePoint(firstChar, text.charAt(i));
-                        } else {
-                            // At end of string, with no low surrogate following the high:
-                            codePoint = TerminalEmulator.UNICODE_REPLACEMENT_CHAR;
-                        }
-                    } else {
-                        codePoint = firstChar;
-                    }
+        };
+    }
 
-                    // Check onKeyDown() for details.
-                    if (mClient.readShiftKey())
-                        codePoint = Character.toUpperCase(codePoint);
+    private void sendTextToTerminal(CharSequence text, boolean applyModifiers) {
+        stopTextSelectionMode();
+        final int textLengthInChars = text.length();
+        for (int i = 0; i < textLengthInChars; i++) {
+            char firstChar = text.charAt(i);
+            int codePoint;
+            if (!applyModifiers && Character.isSurrogate(firstChar)) {
+                if (Character.isHighSurrogate(firstChar) && i + 1 < textLengthInChars
+                        && Character.isLowSurrogate(text.charAt(i + 1))) {
+                    codePoint = Character.toCodePoint(firstChar, text.charAt(++i));
+                } else {
+                    codePoint = TerminalEmulator.UNICODE_REPLACEMENT_CHAR;
+                }
+            } else if (Character.isHighSurrogate(firstChar)) {
+                if (++i < textLengthInChars) {
+                    codePoint = Character.toCodePoint(firstChar, text.charAt(i));
+                } else {
+                    // At end of string, with no low surrogate following the high:
+                    codePoint = TerminalEmulator.UNICODE_REPLACEMENT_CHAR;
+                }
+            } else {
+                codePoint = firstChar;
+            }
 
-                    boolean ctrlHeld = false;
-                    if (codePoint <= 31 && codePoint != 27) {
-                        if (codePoint == '\n') {
-                            // The AOSP keyboard and descendants seems to send \n as text when the enter key is pressed,
-                            // instead of a key event like most other keyboard apps. A terminal expects \r for the enter
-                            // key (although when icrnl is enabled this doesn't make a difference - run 'stty -icrnl' to
-                            // check the behaviour).
-                            codePoint = '\r';
-                        }
+            // Check onKeyDown() for details.
+            if (applyModifiers && mClient.readShiftKey())
+                codePoint = Character.toUpperCase(codePoint);
 
-                        // E.g. penti keyboard for ctrl input.
-                        ctrlHeld = true;
-                        switch (codePoint) {
-                            case 31:
-                                codePoint = '_';
-                                break;
-                            case 30:
-                                codePoint = '^';
-                                break;
-                            case 29:
-                                codePoint = ']';
-                                break;
-                            case 28:
-                                codePoint = '\\';
-                                break;
-                            default:
-                                codePoint += 96;
-                                break;
-                        }
-                    }
+            boolean ctrlHeld = false;
+            if (codePoint <= 31 && codePoint != 27) {
+                if (codePoint == '\n') {
+                    // The AOSP keyboard and descendants seems to send \n as text when the enter key is pressed,
+                    // instead of a key event like most other keyboard apps. A terminal expects \r for the enter
+                    // key (although when icrnl is enabled this doesn't make a difference - run 'stty -icrnl' to
+                    // check the behaviour).
+                    codePoint = '\r';
+                }
 
-                    inputCodePoint(KEY_EVENT_SOURCE_SOFT_KEYBOARD, codePoint, ctrlHeld, false);
+                // E.g. penti keyboard for ctrl input.
+                ctrlHeld = true;
+                switch (codePoint) {
+                    case 31:
+                        codePoint = '_';
+                        break;
+                    case 30:
+                        codePoint = '^';
+                        break;
+                    case 29:
+                        codePoint = ']';
+                        break;
+                    case 28:
+                        codePoint = '\\';
+                        break;
+                    default:
+                        codePoint += 96;
+                        break;
                 }
             }
 
-        };
+            inputCodePoint(KEY_EVENT_SOURCE_SOFT_KEYBOARD, codePoint, ctrlHeld, false);
+        }
+    }
+
+    private boolean shouldEnableImeSuggestions() {
+        return mClient != null && mClient.isTerminalViewSelected() && mClient.shouldEnableImeSuggestions()
+            && !mClient.shouldEnforceCharBasedInput();
+    }
+
+    private boolean shouldLogTerminalInput() {
+        // KeyEvent characters and code-point diagnostics can reveal the same text as commitText.
+        return TERMINAL_VIEW_KEY_LOGGING_ENABLED && !mDispatchingImeInput
+            && mPredictiveInputConnection == null && !shouldEnableImeSuggestions();
+    }
+
+    /** Apply a property reload without restarting the activity or shell sessions. */
+    public void updateImeInputMode() {
+        boolean enabled = shouldEnableImeSuggestions();
+        if (enabled == mLastImeSuggestionsEnabled) return;
+        closePredictiveInputConnection();
+        mLastImeSuggestionsEnabled = enabled;
+        requestImeRestart();
+    }
+
+    /** Finalize local input before an action that bypasses the IME, without consuming modifiers. */
+    public void finishImeInput() {
+        if (mDispatchingImeInput) return;
+        if (mPredictiveInputConnection != null) {
+            closePredictiveInputConnection();
+            requestImeRestart();
+        } else if (shouldEnableImeSuggestions()) {
+            requestImeRestart();
+        }
+    }
+
+    private void closePredictiveInputConnection() {
+        if (mPredictiveInputConnection == null) return;
+        mPredictiveInputConnection.closeConnection();
+        mPredictiveInputConnection = null;
+        invalidate();
+    }
+
+    private void requestImeRestart() {
+        if (mImeRestartPending) return;
+        mImeRestartPending = true;
+        post(() -> {
+            mImeRestartPending = false;
+            if (!hasFocus() || !hasWindowFocus()) return;
+            InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.restartInput(TerminalView.this);
+        });
+    }
+
+    @Override
+    protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
+        if (!gainFocus) finishImeInput();
+        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
+        if (gainFocus && shouldEnableImeSuggestions()) requestImeRestart();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        if (!hasWindowFocus) finishImeInput();
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (hasWindowFocus && shouldEnableImeSuggestions()) requestImeRestart();
     }
 
     @Override
@@ -555,6 +703,7 @@ public final class TerminalView extends View {
 
     /** Send a single mouse event code to the terminal. */
     void sendMouseEventCode(MotionEvent e, int button, boolean pressed) {
+        finishImeInput();
         int[] columnAndRow = getColumnAndRow(e, false);
         int x = columnAndRow[0] + 1;
         int y = columnAndRow[1] + 1;
@@ -623,7 +772,10 @@ public final class TerminalView extends View {
                     ClipData.Item clipItem = clipData.getItemAt(0);
                     if (clipItem != null) {
                         CharSequence text = clipItem.coerceToText(getContext());
-                        if (!TextUtils.isEmpty(text)) mEmulator.paste(text.toString());
+                        if (!TextUtils.isEmpty(text)) {
+                            finishImeInput();
+                            mEmulator.paste(text.toString());
+                        }
                     }
                 }
             } else if (mEmulator.isMouseTrackingActive()) { // BUTTON_PRIMARY.
@@ -645,7 +797,7 @@ public final class TerminalView extends View {
 
     @Override
     public boolean onKeyPreIme(int keyCode, KeyEvent event) {
-        if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+        if (shouldLogTerminalInput())
             mClient.logInfo(LOG_TAG, "onKeyPreIme(keyCode=" + keyCode + ", event=" + event + ")");
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             cancelRequestAutoFill();
@@ -768,7 +920,10 @@ public final class TerminalView extends View {
      */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+        if (!mDispatchingImeInput && !KeyEvent.isModifierKey(keyCode)
+                && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && keyCode != KeyEvent.KEYCODE_VOLUME_UP)
+            finishImeInput();
+        if (shouldLogTerminalInput())
             mClient.logInfo(LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
         if (mEmulator == null) return true;
         if (isSelectingText()) {
@@ -800,7 +955,7 @@ public final class TerminalView extends View {
         if (event.isNumLockOn()) keyMod |= KeyHandler.KEYMOD_NUM_LOCK;
         // https://github.com/termux/termux-app/issues/731
         if (!event.isFunctionPressed() && handleKeyCode(keyCode, keyMod)) {
-            if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "handleKeyCode() took key event");
+            if (shouldLogTerminalInput()) mClient.logInfo(LOG_TAG, "handleKeyCode() took key event");
             return true;
         }
 
@@ -818,7 +973,7 @@ public final class TerminalView extends View {
         if (mClient.readFnKey()) effectiveMetaState |= KeyEvent.META_FUNCTION_ON;
 
         int result = event.getUnicodeChar(effectiveMetaState);
-        if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+        if (shouldLogTerminalInput())
             mClient.logInfo(LOG_TAG, "KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
         if (result == 0) {
             return false;
@@ -845,7 +1000,8 @@ public final class TerminalView extends View {
     }
 
     public void inputCodePoint(int eventSource, int codePoint, boolean controlDownFromEvent, boolean leftAltDownFromEvent) {
-        if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
+        if (!mDispatchingImeInput) finishImeInput();
+        if (shouldLogTerminalInput()) {
             mClient.logInfo(LOG_TAG, "inputCodePoint(eventSource=" + eventSource + ", codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
                 + leftAltDownFromEvent + ")");
         }
@@ -856,10 +1012,10 @@ public final class TerminalView extends View {
         if (mEmulator != null)
             mEmulator.setCursorBlinkState(true);
 
-        final boolean controlDown = controlDownFromEvent || mClient.readControlKey();
-        final boolean altDown = leftAltDownFromEvent || mClient.readAltKey();
+        final boolean controlDown = controlDownFromEvent || (!mWritingImeDraft && mClient.readControlKey());
+        final boolean altDown = leftAltDownFromEvent || (!mWritingImeDraft && mClient.readAltKey());
 
-        if (mClient.onCodePoint(codePoint, controlDown, mTermSession)) return;
+        if (!mWritingImeDraft && mClient.onCodePoint(codePoint, controlDown, mTermSession)) return;
 
         if (controlDown) {
             if (codePoint >= 'a' && codePoint <= 'z') {
@@ -911,6 +1067,7 @@ public final class TerminalView extends View {
 
     /** Input the specified keyCode if applicable and return if the input was consumed. */
     public boolean handleKeyCode(int keyCode, int keyMod) {
+        if (!mDispatchingImeInput) finishImeInput();
         // Ensure cursor is shown when a key is pressed down like long hold on (arrow) keys
         if (mEmulator != null)
             mEmulator.setCursorBlinkState(true);
@@ -954,7 +1111,7 @@ public final class TerminalView extends View {
      */
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+        if (shouldLogTerminalInput())
             mClient.logInfo(LOG_TAG, "onKeyUp(keyCode=" + keyCode + ", event=" + event + ")");
 
         // Do not return for KEYCODE_BACK and send it to the client since user may be trying
@@ -1031,6 +1188,12 @@ public final class TerminalView extends View {
 
             mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3]);
 
+            if (mPredictiveInputConnection != null) {
+                Editable draft = mPredictiveInputConnection.getEditable();
+                mRenderer.renderImeDraft(mEmulator, canvas, mTopRow, draft,
+                    Selection.getSelectionEnd(draft));
+            }
+
             // render the text selection handles
             renderTextSelection();
         }
@@ -1086,6 +1249,7 @@ public final class TerminalView extends View {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void autofill(AutofillValue value) {
+        finishImeInput();
         if (value.isText()) {
             mTermSession.write(value.getTextValue().toString());
         }
@@ -1297,13 +1461,13 @@ public final class TerminalView extends View {
                 return;
             // If cursor blinder is to be started only if cursor is enabled
             else if (startOnlyIfCursorEnabled && ! mEmulator.isCursorEnabled()) {
-                if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+                if (shouldLogTerminalInput())
                     mClient.logVerbose(LOG_TAG, "Ignoring call to start cursor blinker since cursor is not enabled");
                 return;
             }
 
             // Start cursor blinker runnable
-            if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+            if (shouldLogTerminalInput())
                 mClient.logVerbose(LOG_TAG, "Starting cursor blinker with the blink rate " + mTerminalCursorBlinkerRate);
             if (mTerminalCursorBlinkerHandler == null)
                 mTerminalCursorBlinkerHandler = new Handler(Looper.getMainLooper());
@@ -1318,7 +1482,7 @@ public final class TerminalView extends View {
      */
     private void stopTerminalCursorBlinker() {
         if (mTerminalCursorBlinkerHandler != null && mTerminalCursorBlinkerRunnable != null) {
-            if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
+            if (shouldLogTerminalInput())
                 mClient.logVerbose(LOG_TAG, "Stopping cursor blinker");
             mTerminalCursorBlinkerHandler.removeCallbacks(mTerminalCursorBlinkerRunnable);
         }
@@ -1461,6 +1625,7 @@ public final class TerminalView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
+        closePredictiveInputConnection();
         super.onDetachedFromWindow();
 
         if (mTextSelectionCursorController != null) {
