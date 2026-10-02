@@ -1,0 +1,45 @@
+name: Isolated IME fixture APK
+
+on:
+  push:
+    branches: [ 'test/isolated-ime-harness' ]
+    paths:
+      - 'ime-harness/**'
+      - '.github/workflows/ime_harness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Build isolated arm64 debug APK
+        run: ./gradlew :ime-harness:assembleDebug
+      - name: Name and checksum artifact
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, shutil
+          source = pathlib.Path('ime-harness/build/outputs/apk/debug')
+          metadata = json.loads((source / 'output-metadata.json').read_text())
+          destination = pathlib.Path('ime-harness/build/physical-apk')
+          destination.mkdir(parents=True)
+          apk = destination / ('termux-ime-test_' + metadata['elements'][0]['versionName'] + '_arm64-v8a.apk')
+          shutil.copyfile(source / 'ime-harness-debug.apk', apk)
+          (destination / 'SHA256SUMS').write_text(hashlib.sha256(apk.read_bytes()).hexdigest() + '  ' + apk.name + '\n')
+          shutil.copyfile(source / 'output-metadata.json', destination / 'output-metadata.json')
+          PY
+      - name: Upload fixture APK and identity
+        uses: actions/upload-artifact@v6
+        with:
+          name: termux-ime-test-${{ github.sha }}-arm64-v8a
+          path: ime-harness/build/physical-apk/*
+          if-no-files-found: error

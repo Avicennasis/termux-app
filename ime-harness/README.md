@@ -17,6 +17,20 @@ received lines against named synthetic fixtures; Shell starts Android mksh.
 New/Next exercise session changes. The initial mode is off. Rotation retains
 sessions while recreating the view; the real input connection is retired.
 
+Probe also has deterministic typo-rejection, two-space, numeric, long-word,
+accent/emoji, custom-key ordering and bounded background-output fixtures. A raw
+38-byte fixture checks Ctrl+C/D/L/Z, Alt+B, Esc, Tab, arrows, Home/End, popup End,
+the C-c macro, custom text, Backspace and Enter without running those controls as
+commands. Only PASS/FAIL/length results are stored. For reproducible test setup,
+`adb shell am start -n systems.simmons.termuximetest/.MainActivity --ei fixture N`
+selects one of those fixed fixtures; actual Gboard tests must tap/swipe the IME,
+not use `adb input text`. Invalid fixture numbers select the first fixture.
+
+The test buttons are hidden in landscape so the real terminal/extra-key/IME
+layout has space comparable to TermuxActivity. They remain available in portrait.
+The fixture keeps the screen awake only while it is foreground; it does not
+change the phone's lock/display settings. APK CI runs only on the fixture branch.
+
 This can check physical Gboard/IME protocols, Unicode, PTY input and the real
 extra-key controls. It does **not** validate full TermuxActivity insets/settings,
 bootstrap/packages, Bash, vim/nano, plugin compatibility or all production

@@ -2,10 +2,13 @@ package systems.simmons.termuximetest;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.res.Configuration;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -28,7 +31,13 @@ import java.util.ArrayList;
 
 /** Standalone hardware fixture; never accesses com.termux data, properties, services or bootstrap. */
 public class MainActivity extends Activity implements TerminalSessionClient {
-    private static final String[] FIXTURES = {"hello world", "one two three", "café 😀 中文", "hello, world!", "Hello World"};
+    private static final String[] FIXTURES = {"hello world", "one two three", "café 😀 中文",
+        "hello, world!", "Hello World", "café 😀", "hello wprld", "hello  world",
+        "0123456789", "pneumonoultramicroscopicsilicovolcanoconiosis", "hellocustom world",
+        "hello world (background output)", "Terminal key byte replay"};
+    private static final int NOISE_FIXTURE = 11;
+    private static final int KEY_FIXTURE = 12;
+    private static final String KEY_BYTES = "03040c1a1b621b091b5b411b5b421b5b441b5b431b5b481b5b461b5b4603637573746f6d7f0d";
     private TerminalView terminal;
     private ExtraKeysView extraKeys;
     private final ArrayList<TerminalSession> sessions = new ArrayList<>();
@@ -42,6 +51,8 @@ public class MainActivity extends Activity implements TerminalSessionClient {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Scoped to this foreground fixture; preserve the phone's lock/display settings.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         predictive = getPreferences(0).getBoolean("predictive", false);
         charBased = getPreferences(0).getBoolean("charBased", false);
         twoRows = getPreferences(0).getBoolean("twoRows", false);
@@ -50,6 +61,8 @@ public class MainActivity extends Activity implements TerminalSessionClient {
         root.setBackgroundColor(Color.BLACK);
         status = new TextView(this);
         status.setTextColor(Color.WHITE);
+        status.setTextSize(12);
+        status.setMaxLines(1);
         status.setPadding(dp(8), dp(4), dp(8), dp(4));
         root.addView(status);
 
@@ -97,15 +110,30 @@ public class MainActivity extends Activity implements TerminalSessionClient {
                 sessions.add(session);
             }
         }
-        if (sessions.isEmpty()) startSession(0);
+        if (sessions.isEmpty()) startSession(validFixture(getIntent().getIntExtra("fixture", 0)));
         else { selected = Math.min(getPreferences(0).getInt("selected", 0), sessions.size() - 1); attach(); }
         terminal.requestFocus();
         terminal.postDelayed(this::showKeyboard, 300);
     }
 
+    private int validFixture(int fixture) {
+        return fixture >= 0 && fixture < FIXTURES.length ? fixture : 0;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent.hasExtra("fixture")) startSession(validFixture(intent.getIntExtra("fixture", 0)));
+    }
+
     private LinearLayout row() {
         LinearLayout row = new LinearLayout(this);
-        root.addView(row, new LinearLayout.LayoutParams(-1, dp(40)));
+        boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        root.addView(row, new LinearLayout.LayoutParams(-1, dp(landscape ? 24 : 40)));
+        // These are test buttons, not terminal controls. Give the real extra keys and IME
+        // landscape space comparable to TermuxActivity, which has no fixture button rows.
+        if (landscape) row.setVisibility(View.GONE);
         return row;
     }
 
@@ -133,9 +161,9 @@ public class MainActivity extends Activity implements TerminalSessionClient {
     }
 
     private void updateStatus() {
-        status.setText("IME test · " + (predictive ? "Predict ON" : "Predict OFF")
+        status.setText((predictive ? "Predict ON" : "Predict OFF")
             + (charBased ? " · Char ON (wins)" : " · Char OFF")
-            + " · Session " + (selected + 1) + " · Synthetic input only");
+            + " · S" + (selected + 1) + " · Synthetic input only");
     }
 
     private void reloadKeys() {
@@ -166,8 +194,11 @@ public class MainActivity extends Activity implements TerminalSessionClient {
                 byte[] buffer = new byte[4096];
                 for (int count; (count = input.read(buffer)) != -1; ) output.write(buffer, 0, count);
             } catch (Exception error) { throw new IllegalStateException("Cannot copy fixture script", error); }
-            args = new String[]{"sh", script.getAbsolutePath(), FIXTURES[fixture],
-                new File(getFilesDir(), "results.txt").getAbsolutePath(), Integer.toString(fixture)};
+            String expected = fixture == NOISE_FIXTURE ? "hello world"
+                : fixture == KEY_FIXTURE ? KEY_BYTES : FIXTURES[fixture];
+            args = new String[]{"sh", script.getAbsolutePath(), expected,
+                new File(getFilesDir(), "results.txt").getAbsolutePath(), Integer.toString(fixture),
+                fixture == NOISE_FIXTURE ? "noise" : fixture == KEY_FIXTURE ? "keys" : "quiet"};
         }
         TerminalSession session = new TerminalSession("/system/bin/sh", home.getAbsolutePath(), args,
             new String[]{"PATH=/system/bin", "HOME=" + home.getAbsolutePath(), "TERM=xterm-256color",
