@@ -175,3 +175,6 @@ The private handoff directory `../termux-avic-handoff/` holds exact signed-artif
 identity, safe commands, device audit, CI status and physical results. Automated,
 old fixture and full-app physical validation must be recorded independently.
 No upstream PR, maintainer contact or public release is part of this delivery.
+
+See the [production device-test report](termux-avic-device-tests.md) for the
+physical matrix, failed attempts, corrections and coverage limits.

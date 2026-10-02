@@ -40,9 +40,11 @@ def unlocked():
 
 def guard():
     unlocked()
-    activity = run("shell", "dumpsys", "activity", "activities")
-    top = [line for line in activity.splitlines() if "topResumedActivity" in line]
-    assert any(PACKAGE + "/" in line for line in top), "Personal app is not foreground"
+    # Multi-window dumps can list a resumed Activity in an inactive task too.
+    # Require the actual focused window before sending input or capturing it.
+    windows = run("shell", "dumpsys", "window")
+    focus = [line for line in windows.splitlines() if "mCurrentFocus=" in line]
+    assert any(PACKAGE + "/" in line for line in focus), "Personal app is not focused"
 
 def tap(x, y):
     run("shell", "input", "tap", str(x), str(y))
@@ -74,6 +76,17 @@ def refresh_buttons():
             if label:
                 BUTTONS[aliases.get(label, label)] = center(node)
     return BUTTONS
+
+def ensure_keyboard():
+    """Wait for the production keyboard before using inspected coordinates."""
+    guard()
+    time.sleep(1.5)  # Returning from Settings can still be attaching the IME.
+    if 'mInputShown=true' not in run('shell', 'dumpsys', 'input_method'):
+        run('shell', 'input', 'swipe', '12', '500', '900', '500', '350')
+        click_text('KEYBOARD')
+    time.sleep(1)
+    assert 'mInputShown=true' in run('shell', 'dumpsys', 'input_method'), 'Keyboard is hidden'
+    refresh_buttons()
 
 def key(label):
     guard()
