@@ -1,1 +1,3 @@
 include ':app', ':termux-shared', ':terminal-emulator', ':terminal-view'
+// Fork-only physical IME fixture; no Termux bootstrap or shared UID.
+include ':ime-harness'

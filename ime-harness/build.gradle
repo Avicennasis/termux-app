@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'systems.simmons.termuximetest'
+    compileSdkVersion project.properties.compileSdkVersion.toInteger()
+    defaultConfig {
+        applicationId 'systems.simmons.termuximetest'
+        minSdkVersion 21
+        targetSdkVersion 28 // Match the tested upstream Termux app's window/IME behavior.
+        versionCode 1
+        versionName '0.1.0+e686b69'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    signingConfigs {
+        debug {
+            storeFile rootProject.file('app/testkey_untrusted.jks')
+            keyAlias 'alias'
+            storePassword 'xrj45yWGLbsO7W0v'
+            keyPassword 'xrj45yWGLbsO7W0v'
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.debug }
+    }
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    packagingOptions { jniLibs { useLegacyPackaging true } }
+}
+
+dependencies {
+    implementation project(':terminal-view')
+    implementation project(':termux-shared')
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+}
