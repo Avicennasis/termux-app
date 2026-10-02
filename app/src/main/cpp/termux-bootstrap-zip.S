@@ -1,3 +1,4 @@
+ #include "bootstrap-checksum.h"
      .global blob
      .global blob_size
      .section .rodata

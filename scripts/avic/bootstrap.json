@@ -1,0 +1,8 @@
+{
+  "package": "com.termuxavic",
+  "prefix": "/data/data/com.termuxavic/files/usr",
+  "abi": "arm64-v8a",
+  "package_variant": "apt-android-7",
+  "sha256": "e2bce916f9ccca9e304b3f8982b9b8ce948fd37095680b1e08d901faf107f7b5",
+  "package_source_commit": "fb44d31f3445d7efd2cee6dada47aa19401c1329"
+}

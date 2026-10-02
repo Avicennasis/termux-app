@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string translatable="false" name="termux_ime_suggestions_title">Predictive keyboard input</string>
+    <string translatable="false" name="termux_ime_suggestions_off">Off (default). Use normal terminal input.</string>
+    <string translatable="false" name="termux_ime_suggestions_on">On. Only the current unsent token is editable. Disable before secrets or immediate-input apps. enforce-char-based-input takes precedence.</string>
+    <string translatable="false" name="termux_ime_suggestions_enable">Enable</string>
+    <string translatable="false" name="termux_ime_suggestions_guidance">Your keyboard sees typed input. Termux-Avic requests no personalized learning; the keyboard may ignore that request. Terminal output and history are never supplied to the keyboard.\n\nCheck suggested commands before pressing Enter. Only the current unsent token can be corrected. Letters wait for a space, punctuation, Enter, or control action. Disable this mode before passwords, tokens, private commands, vim command mode, games, or apps needing immediate character input. The local preview can appear even when a program turns echo off.\n\nThe enforce-char-based-input property still takes precedence. Changes apply when you return to the terminal; termux-reload-settings also works.</string>
+    <string translatable="false" name="termux_ime_suggestions_save_failed">Could not save termux.properties. Check its path and permissions.</string>
+</resources>

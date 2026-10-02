@@ -1,0 +1,36 @@
+name: Termux-Avic
+on:
+  push:
+    branches: [feature/termux-avic]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify and stage custom-prefix bootstrap
+        run: |
+          python3 scripts/avic/verify-bootstrap.py scripts/avic/bootstrap-aarch64.zip
+          cp scripts/avic/bootstrap-aarch64.zip app/src/main/cpp/bootstrap-aarch64.zip
+      - name: Run all debug and release unit tests
+        run: ./gradlew test
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build unsigned full app
+        run: ./gradlew :app:assembleRelease
+      - name: Verify embedded custom-prefix bootstrap
+        run: python3 scripts/avic/verify-bootstrap.py scripts/avic/bootstrap-aarch64.zip --apk app/build/outputs/apk/release/termux-avic_apt-android-7-release_arm64-v8a-unsigned.apk
+      - uses: actions/upload-artifact@v6
+        with:
+          name: termux-avic-arm64-unsigned
+          path: app/build/outputs/apk/release/*-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14

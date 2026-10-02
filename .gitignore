@@ -10,6 +10,9 @@ release/
 .externalNativeBuild
 .cxx
 *.zip
+!scripts/avic/bootstrap-aarch64.zip
+__pycache__/
+app/src/main/cpp/bootstrap-checksum.h
 
 # Local configuration file (sdk path, etc)
 local.properties

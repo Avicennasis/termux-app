@@ -309,6 +309,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mIsInvalidState) return;
 
+        // Normal Settings writes the same opt-in property used by termux-reload-settings.
+        reloadProperties();
+
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
 

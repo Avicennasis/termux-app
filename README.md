@@ -1,3 +1,19 @@
+# Termux-Avic
+
+Personal full Termux distribution with optional predictive keyboard input,
+the normal launcher, shell bootstrap, sessions, settings and extra keys.
+Its independent Android package is `com.termuxavic`, with packages compiled for
+`/data/data/com.termuxavic/files/usr`. Predictive input remains off by default.
+
+[![Termux-Avic CI](https://github.com/Avicennasis/termux-app/actions/workflows/termux_avic.yml/badge.svg?branch=feature%2Ftermux-avic)](https://github.com/Avicennasis/termux-app/actions/workflows/termux_avic.yml)
+
+Use the [personal distribution instructions](docs/en/termux-avic.md) for builds,
+private signing, installation, privacy guidance, packages and plugin compatibility.
+CI artifacts are unsigned; everyday APKs use a stable private signing identity.
+The original Play Termux installation remains independent.
+
+The upstream documentation below describes the original Termux distribution.
+
 # Termux application
 
 [![Build status](https://github.com/termux/termux-app/workflows/Build/badge.svg)](https://github.com/termux/termux-app/actions)
