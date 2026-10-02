@@ -1,0 +1,269 @@
+package com.termux.view;
+
+import android.graphics.Typeface;
+import android.text.InputType;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+
+import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.TerminalSession;
+import com.termux.terminal.TerminalSessionClient;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
+import org.robolectric.util.ReflectionHelpers;
+
+import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
+
+import static org.junit.Assert.*;
+
+/** Replays the real TerminalView -> TerminalSession UTF-8 queue path without starting a PTY. */
+@RunWith(RobolectricTestRunner.class)
+@Config(sdk = {23, 36}, manifest = Config.NONE)
+public class TerminalViewImeTest {
+
+    static class Client implements TerminalViewClient {
+        boolean predictions;
+        boolean charBased;
+        boolean selected = true;
+        boolean ctrl;
+        boolean alt;
+        final StringBuilder logs = new StringBuilder();
+
+        public boolean shouldEnableImeSuggestions() { return predictions; }
+        public boolean shouldEnforceCharBasedInput() { return charBased; }
+        public boolean isTerminalViewSelected() { return selected; }
+        public boolean hasTerminalInputModifiers() { return ctrl || alt; }
+        public boolean readControlKey() { boolean result = ctrl; ctrl = false; return result; }
+        public boolean readAltKey() { boolean result = alt; alt = false; return result; }
+        public boolean readShiftKey() { return false; }
+        public boolean readFnKey() { return false; }
+        public boolean shouldBackButtonBeMappedToEscape() { return false; }
+        public boolean shouldUseCtrlSpaceWorkaround() { return false; }
+        public float onScale(float scale) { return scale; }
+        public void onSingleTapUp(MotionEvent e) {}
+        public void copyModeChanged(boolean copyMode) {}
+        public boolean onKeyDown(int keyCode, KeyEvent e, TerminalSession session) { return false; }
+        public boolean onKeyUp(int keyCode, KeyEvent e) { return false; }
+        public boolean onLongPress(MotionEvent e) { return false; }
+        public boolean onCodePoint(int codePoint, boolean ctrlDown, TerminalSession session) { return false; }
+        public void onEmulatorSet() {}
+        public void logError(String tag, String message) { logs.append(message); }
+        public void logWarn(String tag, String message) { logs.append(message); }
+        public void logInfo(String tag, String message) { logs.append(message); }
+        public void logDebug(String tag, String message) { logs.append(message); }
+        public void logVerbose(String tag, String message) { logs.append(message); }
+        public void logStackTraceWithMessage(String tag, String message, Exception e) { logs.append(message); }
+        public void logStackTrace(String tag, Exception e) {}
+    }
+
+    private Client client;
+    private TerminalView view;
+    private TerminalSession session;
+
+    private TerminalSession newSession() {
+        TerminalSessionClient callback = (TerminalSessionClient) Proxy.newProxyInstance(
+            TerminalSessionClient.class.getClassLoader(), new Class[]{TerminalSessionClient.class},
+            (proxy, method, args) -> method.getReturnType() == Integer.class ? Integer.valueOf(0) : null);
+        TerminalSession result = new TerminalSession("unused", "/", new String[0], new String[0], 100, callback);
+        TerminalEmulator emulator = new TerminalEmulator(result, 80, 24, 8, 16, 100, callback);
+        ReflectionHelpers.setField(result, "mEmulator", emulator);
+        ReflectionHelpers.setField(result, "mShellPid", 1);
+        return result;
+    }
+
+    @Before
+    public void setUp() {
+        client = new Client();
+        view = new TerminalView(RuntimeEnvironment.getApplication(), null);
+        view.setTerminalViewClient(client);
+        view.setIsTerminalViewKeyLoggingEnabled(false);
+        session = newSession();
+        view.mTermSession = session;
+        view.mEmulator = session.getEmulator();
+        view.mRenderer = new TerminalRenderer(14, Typeface.MONOSPACE);
+    }
+
+    private InputConnection predictive() {
+        client.predictions = true;
+        return view.onCreateInputConnection(new EditorInfo());
+    }
+
+    private String output(TerminalSession source) {
+        Object queue = ReflectionHelpers.getField(source, "mTerminalToProcessIOQueue");
+        byte[] bytes = new byte[4096];
+        int count = ReflectionHelpers.callInstanceMethod(queue, "read",
+            ReflectionHelpers.ClassParameter.from(byte[].class, bytes),
+            ReflectionHelpers.ClassParameter.from(boolean.class, false));
+        return count <= 0 ? "" : new String(bytes, 0, count, StandardCharsets.UTF_8);
+    }
+
+    private void terminalKey(int key, int modifiers) {
+        view.onKeyDown(key, new KeyEvent(0, 0, KeyEvent.ACTION_DOWN, key, 0, modifiers));
+    }
+
+    @Test
+    public void legacyDefaultAndCharacterModeKeepTheirEditorInfoAndImmediateInput() {
+        for (boolean charMode : new boolean[]{false, true}) {
+            client.charBased = charMode;
+            EditorInfo info = new EditorInfo();
+            InputConnection connection = view.onCreateInputConnection(info);
+            assertFalse(connection instanceof TerminalInputConnection);
+            assertEquals(charMode ? InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS : InputType.TYPE_NULL, info.inputType);
+            assertEquals(EditorInfo.IME_FLAG_NO_FULLSCREEN, info.imeOptions);
+            connection.commitText("a", 1);
+            connection.commitText("bc", 1);
+            assertEquals("abc", output(session));
+        }
+    }
+
+    @Test
+    public void optInAdvertisesPredictionsAndDiscouragesLearning() {
+        client.predictions = true;
+        EditorInfo info = new EditorInfo();
+        assertTrue(view.onCreateInputConnection(info) instanceof TerminalInputConnection);
+        assertEquals(InputType.TYPE_CLASS_TEXT, info.inputType & InputType.TYPE_MASK_CLASS);
+        assertEquals(0, info.inputType & InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        assertTrue((info.inputType & InputType.TYPE_TEXT_FLAG_AUTO_CORRECT) != 0);
+        assertTrue((info.imeOptions & EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0);
+        assertTrue((info.imeOptions & EditorInfo.IME_FLAG_NO_EXTRACT_UI) != 0);
+        assertEquals(0, info.initialSelStart);
+        assertEquals(0, info.initialSelEnd);
+    }
+
+    @Test
+    public void characterBasedOverrideAndAlternateToolbarSelectionKeepLegacyContract() {
+        client.predictions = true;
+        client.charBased = true;
+        assertFalse(view.onCreateInputConnection(new EditorInfo()) instanceof TerminalInputConnection);
+        client.charBased = false;
+        client.selected = false;
+        EditorInfo info = new EditorInfo();
+        assertFalse(view.onCreateInputConnection(info) instanceof TerminalInputConnection);
+        assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL, info.inputType);
+    }
+
+    @Test
+    public void unicodeSpacePunctuationAndNewlineUseExistingUtf8AndCrTranslation() {
+        InputConnection connection = predictive();
+        connection.setComposingText("café😀中文", 1);
+        connection.commitText("café😀中文!\n", 1);
+        connection.finishComposingText();
+        assertEquals("café😀中文!\r", output(session));
+    }
+
+    @Test
+    public void extraKeyControlAndNavigationPathsPreserveExactTerminalSequences() {
+        int[] keys = {KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_D, KeyEvent.KEYCODE_L, KeyEvent.KEYCODE_Z,
+            KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_MOVE_HOME, KeyEvent.KEYCODE_MOVE_END};
+        String[] expected = {"\u0003", "\u0004", "\u000c", "\u001a", "\u001b", "\t",
+            "\u001b[A", "\u001b[B", "\u001b[D", "\u001b[C", "\u001b[H", "\u001b[F"};
+        for (int i = 0; i < keys.length; i++) {
+            InputConnection connection = predictive();
+            connection.setComposingText("word", 1);
+            terminalKey(keys[i], i < 4 ? KeyEvent.META_CTRL_ON : 0);
+            assertEquals("key " + keys[i], "word" + expected[i], output(session));
+            assertFalse(connection.commitText("stale", 1));
+        }
+    }
+
+    @Test
+    public void altAndLiteralMacroPathsFlushWithoutStealingOneShotModifiers() {
+        InputConnection connection = predictive();
+        connection.setComposingText("word", 1);
+        terminalKey(KeyEvent.KEYCODE_B, KeyEvent.META_ALT_ON | KeyEvent.META_ALT_LEFT_ON);
+        assertEquals("word\u001bb", output(session));
+        connection = predictive();
+        connection.setComposingText("plain", 1);
+        client.ctrl = true;
+        view.inputCodePoint(TerminalView.KEY_EVENT_SOURCE_VIRTUAL_KEYBOARD, 'c', false, false);
+        assertEquals("plain\u0003", output(session));
+        assertFalse(client.ctrl);
+    }
+
+    @Test
+    public void oneShotCtrlThroughGboardCompositionSendsShortcutOnlyOnce() {
+        InputConnection connection = predictive();
+        connection.setComposingText("word", 1);
+        client.ctrl = true;
+        connection.setComposingText("c", 1);
+        assertFalse(connection.commitText("c", 1));
+        assertEquals("word\u0003", output(session));
+    }
+
+    @Test
+    public void terminalOutputWhileComposingNeverBecomesImeTextOrCommitsDraft() {
+        InputConnection connection = predictive();
+        connection.setComposingText("draft", 1);
+        byte[] output = "background output\r\n".getBytes(StandardCharsets.UTF_8);
+        view.mEmulator.append(output, output.length);
+        view.onScreenUpdated();
+        assertEquals("draft", connection.getTextBeforeCursor(100, 0).toString());
+        assertEquals("", output(session));
+        connection.commitText("corrected ", 1);
+        assertEquals("corrected ", output(session));
+    }
+
+    @Test
+    public void sessionAndWindowFocusChangesFinishOldTargetAndRejectLateCallbacks() {
+        InputConnection old = predictive();
+        old.setComposingText("old", 1);
+        TerminalSession next = newSession();
+        assertTrue(view.attachSession(next));
+        view.mEmulator = next.getEmulator();
+        assertEquals("old", output(session));
+        assertFalse(old.commitText("late", 1));
+        InputConnection fresh = predictive();
+        fresh.setComposingText("new", 1);
+        view.onWindowFocusChanged(false);
+        assertEquals("new", output(next));
+        assertFalse(fresh.finishComposingText());
+        assertEquals("", output(session));
+    }
+
+    @Test
+    public void rapidPropertyReloadsRetireDraftAndRestoreDefaultMode() {
+        for (int i = 0; i < 10; i++) {
+            InputConnection old = predictive();
+            old.setComposingText("word", 1);
+            client.predictions = false;
+            view.updateImeInputMode();
+            assertEquals("word", output(session));
+            assertFalse(old.commitText("late", 1));
+            EditorInfo info = new EditorInfo();
+            view.onCreateInputConnection(info).commitText("x", 1);
+            assertEquals(InputType.TYPE_NULL, info.inputType);
+            assertEquals("x", output(session));
+        }
+    }
+
+    @Test
+    public void diagnosticLoggingNeverIncludesPredictiveInputOrCodePoints() {
+        InputConnection connection = predictive();
+        view.setIsTerminalViewKeyLoggingEnabled(true);
+        connection.setComposingText("PRIVATE", 1);
+        connection.commitText("PRIVATE ", 1);
+        terminalKey(KeyEvent.KEYCODE_A, 0);
+        assertEquals("PRIVATE a", output(session));
+        assertEquals("", client.logs.toString());
+        view.setIsTerminalViewKeyLoggingEnabled(false);
+    }
+
+    @Test
+    public void malformedUtf16CannotCrashPredictiveFlush() {
+        InputConnection connection = predictive();
+        connection.setComposingText("a\uD83Dx\uDC00", 1);
+        connection.finishComposingText();
+        assertEquals("a\uFFFDx\uFFFD", output(session));
+    }
+}
