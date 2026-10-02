@@ -18,7 +18,7 @@ import androidx.annotation.RequiresApi;
  * An opt-in word editor in front of a terminal, NOT an editor of its screen or PTY echo.
  * Only unsent input is editable. This lets an IME revise a word without guessing whether
  * terminal backspaces would undo previously sent input (they need not do so in a TUI).
- * Words committed one character at a time are held until a boundary or an explicit finish.
+ * Tokens committed one character at a time are held until a boundary or terminal action.
  * No terminal output, history, or already sent input is returned to the IME.
  */
 class TerminalInputConnection extends BaseInputConnection {
@@ -202,7 +202,9 @@ class TerminalInputConnection extends BaseInputConnection {
         if (!isActive()) return false;
         beginBatchEdit();
         super.finishComposingText();
-        mFinishRequested = true;
+        // Finishing composition removes pre-edit spans; it does not end editing of the
+        // current token. IMEs can immediately delete or replace committed text, including
+        // an emoji using two UTF-16 units. Keep that text local until a terminal boundary.
         endBatchEdit();
         return true;
     }
@@ -245,8 +247,13 @@ class TerminalInputConnection extends BaseInputConnection {
                 int codePoint = Character.codePointAt(mDraft, i);
                 i += Character.charCount(codePoint);
                 int type = Character.getType(codePoint);
+                // Symbols, emoji modifiers, variation marks and joiners belong to the
+                // editable token too. Sending them immediately would make IME deletion
+                // depend on an unknowable PTY cursor and Unicode erase behavior.
                 if (!Character.isLetterOrDigit(codePoint) && type != Character.NON_SPACING_MARK
-                        && type != Character.COMBINING_SPACING_MARK && type != Character.ENCLOSING_MARK)
+                        && type != Character.COMBINING_SPACING_MARK && type != Character.ENCLOSING_MARK
+                        && type != Character.OTHER_SYMBOL && type != Character.MODIFIER_SYMBOL
+                        && type != Character.FORMAT)
                     count = i;
             }
         }

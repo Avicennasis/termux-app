@@ -44,14 +44,15 @@ autocorrection, selection, and replacement affect this draft, not text already
 processed by the shell. Standard CJK composing text remains supported; this mode
 does not change the composing behavior of the default input connection.
 
-A composing word reaches the terminal when the IME commits it and a word boundary
-is available, explicitly finishes composition, or a terminal control is used.
-Non-composing character commits are also held until a boundary so keyboards
-that replace the current word can do so safely. Spaces, punctuation, emoji,
-and Enter release committed input through that boundary. A trailing word stays
-local until finalized. IME batches are processed together so a finish/replacement
-sequence does not send the old spelling first. Enter retains Termux's newline
-to carriage-return conversion.
+A composing token reaches the terminal when the IME commits it and a word boundary
+is available, or a terminal control is used. Non-composing character commits are
+also held until a boundary so keyboards that replace the current token can do so
+safely. Finishing composition removes its pre-edit state while leaving the token
+editable. Emoji, their modifiers and joiners stay in that draft, allowing Unicode
+Backspace without trying to undo PTY input. Spaces, punctuation and Enter release
+committed input through that boundary. IME batches are processed together so a
+finish/replacement sequence does not send the old spelling first. Enter retains
+Termux's newline to carriage-return conversion.
 
 Backspace edits the local draft first; with an empty draft an ordinary single
 Backspace is sent to the terminal. Selection and forward deletion inside the

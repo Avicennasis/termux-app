@@ -86,9 +86,12 @@ public class TerminalInputConnectionTest {
     }
 
     @Test
-    public void finishCompositionSendsFinalTextOnce() {
+    public void finishCompositionKeepsTokenEditableUntilCloseSendsItOnce() {
         connection.setComposingText("café", 1);
         connection.finishComposingText();
+        assertOutput("");
+        assertEquals("café", draft());
+        assertEquals(-1, BaseInputConnection.getComposingSpanStart(connection.getEditable()));
         connection.closeConnection();
         assertOutput("café");
         assertFalse(connection.commitText("late", 1));
@@ -150,6 +153,7 @@ public class TerminalInputConnectionTest {
         assertEquals("ef", connection.getTextAfterCursor(50, 0).toString());
         connection.commitText("XY", 1);
         connection.finishComposingText();
+        connection.flushPendingText();
         assertOutput("abXYef");
     }
 
@@ -161,6 +165,7 @@ public class TerminalInputConnectionTest {
         assertEquals("acdf", draft());
         assertEquals("cd", connection.getSelectedText(0).toString());
         connection.finishComposingText();
+        connection.flushPendingText();
         assertOutput("acdf");
     }
 
@@ -183,6 +188,7 @@ public class TerminalInputConnectionTest {
         assertTrue(connection.deleteSurroundingTextInCodePoints(1, 0));
         assertEquals("é", draft());
         connection.finishComposingText();
+        connection.flushPendingText();
         assertOutput("é");
     }
 
@@ -194,7 +200,43 @@ public class TerminalInputConnectionTest {
         connection.deleteSurroundingText(1, 0);
         assertEquals("ab", draft());
         connection.finishComposingText();
+        connection.flushPendingText();
         assertOutput("ab");
+    }
+
+    @Test
+    public void emojiCommitFinishAndUtf16BackspaceRemainLocal() {
+        connection.commitText("café ", 1);
+        connection.commitText("😀", 1);
+        connection.finishComposingText();
+        assertOutput("café ");
+        assertEquals("😀", connection.getTextBeforeCursor(100, 0).toString());
+        assertTrue(connection.deleteSurroundingText(2, 0));
+        assertEquals("", draft());
+        assertTrue(terminal.keys.isEmpty());
+        connection.commitText("😀", 1);
+        connection.finishComposingText();
+        key(KeyEvent.KEYCODE_ENTER);
+        assertOutput("café 😀");
+        assertEquals(1, terminal.keys.size());
+        assertEquals(Integer.valueOf(KeyEvent.KEYCODE_ENTER), terminal.keys.get(0));
+    }
+
+    @Test
+    public void finishThenReplaceOutsideBatchAndEmojiJoinersStayEditable() {
+        connection.setComposingText("teh", 1);
+        connection.finishComposingText();
+        assertTrue(connection.setSelection(0, 3));
+        connection.commitText("the ", 1);
+        assertOutput("the ");
+        connection.commitText("👩🏽\u200D💻", 1);
+        connection.finishComposingText();
+        assertEquals("👩🏽\u200D💻", draft());
+        assertTrue(connection.deleteSurroundingText(7, 0));
+        assertEquals("", draft());
+        assertTrue(terminal.keys.isEmpty());
+        connection.commitText("👩🏽\u200D💻!", 1);
+        assertOutput("the 👩🏽\u200D💻!");
     }
 
     @Test
@@ -302,6 +344,7 @@ public class TerminalInputConnectionTest {
         connection.commitText("next", 1);
         connection.replaceText(0, 4, "new", 1, null);
         connection.finishComposingText();
+        connection.flushPendingText();
         assertOutput("the new");
     }
 

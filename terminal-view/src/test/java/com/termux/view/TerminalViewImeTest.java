@@ -260,6 +260,9 @@ public class TerminalViewImeTest {
         assertFalse(old.commitText("late", 1));
         assertTrue(fresh.setComposingText("corrected", 1));
         assertTrue(fresh.finishComposingText());
+        assertEquals("corrected", fresh.getTextBeforeCursor(100, 0).toString());
+        assertEquals("", output(session));
+        view.finishImeInput();
         assertEquals("corrected", output(session));
         assertEquals("", output(session));
     }
@@ -313,6 +316,7 @@ public class TerminalViewImeTest {
         InputConnection connection = predictive();
         connection.setComposingText("a\uD83Dx\uDC00", 1);
         connection.finishComposingText();
+        view.finishImeInput();
         assertEquals("a\uFFFDx\uFFFD", output(session));
     }
 }
