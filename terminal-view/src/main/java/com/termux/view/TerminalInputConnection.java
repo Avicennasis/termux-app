@@ -35,24 +35,46 @@ class TerminalInputConnection extends BaseInputConnection {
     }
 
     private final Target mTarget;
-    private final Editable mDraft = new SpannableStringBuilder();
+    private final Editable mDraft;
+    private boolean mOwnsDraft = true;
     private int mBatchDepth;
     private boolean mFinishRequested;
     private boolean mClosed;
 
     static TerminalInputConnection create(View view, Target target) {
-        if (Build.VERSION.SDK_INT >= 34) return new Api34(view, target);
-        return new TerminalInputConnection(view, target);
+        return create(view, target, new SpannableStringBuilder());
+    }
+
+    static TerminalInputConnection create(View view, Target target, Editable draft) {
+        if (Build.VERSION.SDK_INT >= 34) return new Api34(view, target, draft);
+        return new TerminalInputConnection(view, target, draft);
     }
 
     TerminalInputConnection(View view, Target target) {
-        super(view, true);
-        mTarget = target;
-        Selection.setSelection(mDraft, 0);
+        this(view, target, new SpannableStringBuilder());
     }
 
-    private boolean isActive() {
+    TerminalInputConnection(View view, Target target, Editable draft) {
+        super(view, true);
+        mTarget = target;
+        mDraft = draft;
+        if (Selection.getSelectionStart(mDraft) < 0 || Selection.getSelectionEnd(mDraft) < 0)
+            Selection.setSelection(mDraft, mDraft.length());
+    }
+
+    boolean isActive() {
         return !mClosed && mTarget.isValid();
+    }
+
+    /**
+     * Android may request a connection during binding and then keep the existing one.
+     * Both must see the same unsent editor, as TextView connections see one Editable.
+     * If Android actually replaces the old binding, its close must not clear the draft
+     * already handed to the new connection. The hosting view owns explicit retirement.
+     */
+    Editable handOffDraft() {
+        mOwnsDraft = false;
+        return mDraft;
     }
 
     @Override
@@ -164,8 +186,8 @@ class TerminalInputConnection extends BaseInputConnection {
 
     @RequiresApi(34)
     private static final class Api34 extends TerminalInputConnection {
-        Api34(View view, Target target) {
-            super(view, target);
+        Api34(View view, Target target, Editable draft) {
+            super(view, target, draft);
         }
 
         @Override
@@ -197,14 +219,17 @@ class TerminalInputConnection extends BaseInputConnection {
     @Override
     public void closeConnection() {
         if (mClosed) return;
-        flushPendingText();
+        if (mOwnsDraft) flushPendingText();
         mClosed = true;
         mBatchDepth = 0;
-        mDraft.clear();
-        mDraft.clearSpans();
-        Selection.setSelection(mDraft, 0);
-        // BaseInputConnection.closeConnection calls the virtual finishComposingText(). All
-        // pending input was already sent; our closed guard makes that call a harmless no-op.
+        if (mOwnsDraft) {
+            mDraft.clear();
+            mDraft.clearSpans();
+            Selection.setSelection(mDraft, 0);
+        }
+        // BaseInputConnection calls virtual finishComposingText(). An owning connection
+        // already flushed; a former binding must leave the shared draft for its successor.
+        // Our closed guard makes the superclass call a harmless no-op in either case.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) super.closeConnection();
     }
 

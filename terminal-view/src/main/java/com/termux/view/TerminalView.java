@@ -16,6 +16,7 @@ import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.Selection;
+import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.ActionMode;
@@ -61,6 +62,7 @@ public final class TerminalView extends View {
     public TerminalViewClient mClient;
 
     private TerminalInputConnection mPredictiveInputConnection;
+    private int mImeInputGeneration;
     private boolean mDispatchingImeInput;
     private boolean mWritingImeDraft;
     private boolean mLastImeSuggestionsEnabled;
@@ -320,20 +322,23 @@ public final class TerminalView extends View {
     @Override
     @SuppressLint("InlinedApi") // NO_PERSONALIZED_LEARNING is an inlined flag, safely ignored by older IMEs.
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        closePredictiveInputConnection();
         mLastImeSuggestionsEnabled = shouldEnableImeSuggestions();
         if (mLastImeSuggestionsEnabled) {
+            // IMMS may request a connection then discard it after discovering an existing
+            // binding. Creating one must not close the connection the keyboard still uses.
+            Editable draft = mPredictiveInputConnection == null ? new SpannableStringBuilder()
+                : mPredictiveInputConnection.handOffDraft();
             outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL
                 | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;
             outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_FLAG_NO_EXTRACT_UI
                 | EditorInfo.IME_FLAG_NO_ENTER_ACTION | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
-            outAttrs.initialSelStart = outAttrs.initialSelEnd = 0;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outAttrs.setInitialSurroundingText("");
             final TerminalSession session = mTermSession;
+            final int generation = mImeInputGeneration;
             mPredictiveInputConnection = TerminalInputConnection.create(this, new TerminalInputConnection.Target() {
                 @Override
                 public boolean isValid() {
-                    return mPredictiveInputConnection != null && mTermSession == session && mEmulator != null;
+                    return mPredictiveInputConnection != null && mImeInputGeneration == generation
+                        && mTermSession == session && mEmulator != null;
                 }
 
                 @Override
@@ -382,9 +387,13 @@ public final class TerminalView extends View {
                     closePredictiveInputConnection();
                     requestImeRestart();
                 }
-            });
+            }, draft);
+            outAttrs.initialSelStart = Selection.getSelectionStart(draft);
+            outAttrs.initialSelEnd = Selection.getSelectionEnd(draft);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) outAttrs.setInitialSurroundingText(draft);
             return mPredictiveInputConnection;
         }
+        closePredictiveInputConnection();
         // Ensure that inputType is only set if TerminalView is selected view with the keyboard and
         // an alternate view is not selected, like an EditText. This is necessary if an activity is
         // initially started with the alternate view or if activity is returned to from another app
@@ -556,6 +565,7 @@ public final class TerminalView extends View {
     private void closePredictiveInputConnection() {
         if (mPredictiveInputConnection == null) return;
         mPredictiveInputConnection.closeConnection();
+        mImeInputGeneration++;
         mPredictiveInputConnection = null;
         invalidate();
     }
@@ -566,6 +576,9 @@ public final class TerminalView extends View {
         post(() -> {
             mImeRestartPending = false;
             if (!hasFocus() || !hasWindowFocus()) return;
+            // Window focus can bind a new connection before this queued restart runs.
+            // Do not restart that fresh binding while Android is still attaching its IME.
+            if (mPredictiveInputConnection != null && mPredictiveInputConnection.isActive()) return;
             InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.restartInput(TerminalView.this);
         });
