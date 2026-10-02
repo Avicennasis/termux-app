@@ -65,6 +65,8 @@ public class MainActivity extends Activity implements TerminalSessionClient {
         button(sessionControls, "New", () -> startSession(0));
 
         terminal = new TerminalView(this, null);
+        // Match activity_termux.xml: custom terminal views must accept touch-mode focus.
+        terminal.setFocusableInTouchMode(true);
         terminal.setTextSize(dp(14));
         terminal.setTypeface(Typeface.MONOSPACE);
         terminal.setIsTerminalViewKeyLoggingEnabled(false);
