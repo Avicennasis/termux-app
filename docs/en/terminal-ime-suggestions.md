@@ -41,9 +41,10 @@ The terminal screen is not an editable Android document. Predictive mode gives
 the keyboard a small, local draft of **unsent input only**. Its text and cursor
 are previewed, underlined, inside the terminal view. Composing changes,
 autocorrection, selection, and replacement affect this draft, not text already
-processed by the shell. The default input connection retains its existing CJK
-composing behavior. Language-specific prediction and replacement in the opt-in
-mode still require testing with the actual keyboard and language.
+processed by the shell. The default input connection is unchanged; composing
+support depends on the keyboard, which may use an ASCII fallback in ordinary
+mode. Language-specific prediction and replacement require testing with the
+actual keyboard, version, and language.
 
 A composing token reaches the terminal when the IME commits it and a word boundary
 is available, or a terminal control is used. Non-composing character commits are
@@ -52,8 +53,10 @@ safely. Finishing composition removes its pre-edit state while leaving the token
 editable. Emoji, their modifiers and joiners stay in that draft, allowing Unicode
 Backspace without trying to undo PTY input. Spaces, punctuation and Enter release
 committed input through that boundary. IME batches are processed together so a
-finish/replacement sequence does not send the old spelling first. Enter retains
-Termux's newline to carriage-return conversion.
+finish/replacement sequence does not send the old spelling first. Enter finalizes
+the entire draft before taking its terminal action, including when a keyboard
+sends Enter as a newline character while its local cursor is inside the draft.
+Termux's newline to carriage-return behavior is retained.
 
 Backspace edits the local draft first; with an empty draft an ordinary single
 Backspace is sent to the terminal. Selection and forward deletion inside the

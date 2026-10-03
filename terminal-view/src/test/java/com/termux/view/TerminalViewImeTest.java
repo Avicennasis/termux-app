@@ -161,6 +161,26 @@ public class TerminalViewImeTest {
     }
 
     @Test
+    public void textEnterAtMidDraftSendsFullUtf8TokenBeforeCrAndRetiresTail() {
+        for (String enter : new String[]{"\n", "\r"}) {
+            InputConnection connection = predictive();
+            connection.setComposingText("가", 1);
+            connection.finishComposingText();
+            connection.setSelection(0, 0);
+            connection.setComposingText("나", 1);
+            connection.finishComposingText();
+            assertEquals("가", connection.getTextAfterCursor(10, 0).toString());
+            assertTrue(connection.commitText(enter, 1));
+            assertEquals("나가\r", output(session));
+            assertFalse(connection.commitText("late", 1));
+            view.finishImeInput();
+            assertEquals("", output(session));
+            predictive().commitText("next ", 1);
+            assertEquals("next ", output(session));
+        }
+    }
+
+    @Test
     public void extraKeyControlAndNavigationPathsPreserveExactTerminalSequences() {
         int[] keys = {KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_D, KeyEvent.KEYCODE_L, KeyEvent.KEYCODE_Z,
             KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_DPAD_UP,

@@ -297,6 +297,30 @@ public class TerminalInputConnectionTest {
     }
 
     @Test
+    public void textEnterFinalizesEntireDraftAtMidCursorEvenInBatch() {
+        for (String enter : new String[]{"\n", "\r"}) {
+            setUp();
+            connection.setComposingText("가", 1);
+            connection.finishComposingText();
+            connection.setSelection(0, 0);
+            connection.setComposingText("나", 1);
+            connection.finishComposingText();
+            assertEquals("나가", draft());
+            assertEquals(1, Selection.getSelectionEnd(connection.getEditable()));
+            connection.beginBatchEdit();
+            assertTrue(connection.commitText(enter, 1));
+            assertOutput("나가");
+            assertEquals("", draft());
+            assertEquals(1, terminal.keys.size());
+            assertEquals(Integer.valueOf(KeyEvent.KEYCODE_ENTER), terminal.keys.get(0));
+            assertFalse(connection.endBatchEdit());
+            assertFalse(connection.commitText("late", 1));
+            connection.flushPendingText();
+            assertOutput("나가");
+        }
+    }
+
+    @Test
     public void closeFinishesOpenBatchOnceAndRejectsAllLaterMutation() {
         connection.beginBatchEdit();
         connection.setComposingText("pending", 1);

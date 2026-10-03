@@ -117,6 +117,11 @@ class TerminalInputConnection extends BaseInputConnection {
     public boolean commitText(CharSequence text, int newCursorPosition) {
         if (!isActive() || text == null) return false;
         if (sendModifiedText(text)) return true;
+        // Some IMEs send Enter as text. It must finalize the entire draft even if the
+        // local cursor is in its middle; inserting a newline there would send only the
+        // prefix and leave the suffix to become input to the next terminal command.
+        if (text.length() == 1 && (text.charAt(0) == '\n' || text.charAt(0) == '\r'))
+            return sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
         beginBatchEdit();
         boolean result = super.commitText(text, newCursorPosition);
         if (mDraft.length() > MAX_DRAFT_LENGTH) mFinishRequested = true;
