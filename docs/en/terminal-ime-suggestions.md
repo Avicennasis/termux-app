@@ -41,8 +41,9 @@ The terminal screen is not an editable Android document. Predictive mode gives
 the keyboard a small, local draft of **unsent input only**. Its text and cursor
 are previewed, underlined, inside the terminal view. Composing changes,
 autocorrection, selection, and replacement affect this draft, not text already
-processed by the shell. Standard CJK composing text remains supported; this mode
-does not change the composing behavior of the default input connection.
+processed by the shell. The default input connection retains its existing CJK
+composing behavior. Language-specific prediction and replacement in the opt-in
+mode still require testing with the actual keyboard and language.
 
 A composing token reaches the terminal when the IME commits it and a word boundary
 is available, or a terminal control is used. Non-composing character commits are
@@ -101,8 +102,8 @@ Use ordinary mode in `vim` command mode, games, or other programs that require
 letters to arrive immediately. Extra-key terminal controls remain immediate
 after finalizing the draft, but buffering words changes the timing of ordinary
 letters. Editing already echoed words, reconverting earlier CJK text, fullscreen
-IME editors, handwriting cursor geometry, and committed-text autocorrection are
-outside the local draft's contract.
+IME editors, handwriting cursor geometry, and correction of text already sent to
+the PTY are outside the local draft's contract.
 
 Android's IME resize/inset handling and Termux's existing toolbar overlap
 workaround are preserved. Physical testing must check the suggestion bar and
