@@ -17,6 +17,8 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.lang.reflect.Proxy;
@@ -29,21 +31,30 @@ import static org.junit.Assert.*;
 @Config(sdk = {23, 36}, manifest = Config.NONE)
 public class TerminalViewImeTest {
 
+    /** These sessions have no PTY; keep real View layout and emulator resize in the lifecycle test. */
+    @Implements(className = "com.termux.terminal.JNI", isInAndroidSdk = false)
+    public static class NoPtyResize {
+        @Implementation protected static void __staticInitializer__() {}
+        @Implementation protected static void setPtyWindowSize(int fd, int rows, int columns,
+                                                               int cellWidth, int cellHeight) {}
+    }
+
     static class Client implements TerminalViewClient {
         boolean predictions;
         boolean charBased;
         boolean selected = true;
         boolean ctrl;
         boolean alt;
+        boolean shift;
         final StringBuilder logs = new StringBuilder();
 
         public boolean shouldEnableImeSuggestions() { return predictions; }
         public boolean shouldEnforceCharBasedInput() { return charBased; }
         public boolean isTerminalViewSelected() { return selected; }
-        public boolean hasTerminalInputModifiers() { return ctrl || alt; }
+        public boolean hasTerminalInputModifiers() { return ctrl || alt || shift; }
         public boolean readControlKey() { boolean result = ctrl; ctrl = false; return result; }
         public boolean readAltKey() { boolean result = alt; alt = false; return result; }
-        public boolean readShiftKey() { return false; }
+        public boolean readShiftKey() { boolean result = shift; shift = false; return result; }
         public boolean readFnKey() { return false; }
         public boolean shouldBackButtonBeMappedToEscape() { return false; }
         public boolean shouldUseCtrlSpaceWorkaround() { return false; }
@@ -151,6 +162,95 @@ public class TerminalViewImeTest {
         assertEquals(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL, info.inputType);
     }
 
+    private void screenSequence(String sequence) {
+        byte[] bytes = sequence.getBytes(StandardCharsets.UTF_8);
+        view.mEmulator.append(bytes, bytes.length);
+        view.onScreenUpdated();
+    }
+
+    @Test
+    public void alternateScreenZellijSequenceUsesImmediateUnmodifiedLetters() {
+        client.predictions = true;
+        screenSequence("\u001b[?1049h");
+        assertTrue(view.mEmulator.isAlternateBufferActive());
+        EditorInfo info = new EditorInfo();
+        InputConnection connection = view.onCreateInputConnection(info);
+        assertFalse(connection instanceof TerminalInputConnection);
+        assertEquals(InputType.TYPE_NULL, info.inputType);
+        assertTrue((info.imeOptions & EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0);
+        client.ctrl = true;
+        assertTrue(connection.commitText("g", 1));
+        assertEquals("\u0007", output(session));
+        assertFalse(client.ctrl);
+        assertTrue(connection.commitText("n", 1));
+        assertEquals("n", output(session));
+        assertTrue(connection.commitText("t", 1));
+        assertEquals("t", output(session));
+        assertTrue(client.predictions);
+    }
+
+    @Test
+    public void enteringAlternateScreenFinalizesDraftOnceAndRetiresEveryProbe() {
+        InputConnection bound = predictive();
+        assertTrue(bound.setComposingText("draft", 1));
+        InputConnection probe = view.onCreateInputConnection(new EditorInfo());
+        client.ctrl = true;
+        screenSequence("\u001b[?1049h");
+        assertEquals("draft", output(session));
+        assertTrue(client.ctrl);
+        assertFalse(bound.commitText("late", 1));
+        assertFalse(probe.setComposingText("late", 1));
+        assertEquals(0, ((TerminalInputConnection) bound).getEditable().length());
+        view.onScreenUpdated();
+        assertEquals("", output(session));
+        InputConnection immediate = view.onCreateInputConnection(new EditorInfo());
+        assertTrue(immediate.commitText("g", 1));
+        assertEquals("\u0007", output(session));
+        assertFalse(client.ctrl);
+    }
+
+    @Test
+    public void leavingAlternateScreenRestoresPredictionsWithoutChangingProperty() {
+        client.predictions = true;
+        screenSequence("\u001b[?1049h");
+        InputConnection immediate = view.onCreateInputConnection(new EditorInfo());
+        assertTrue(immediate.commitText("n", 1));
+        assertEquals("n", output(session));
+        screenSequence("\u001b[?1049l");
+        assertFalse(view.mEmulator.isAlternateBufferActive());
+        assertTrue(client.predictions);
+        EditorInfo info = new EditorInfo();
+        InputConnection draft = view.onCreateInputConnection(info);
+        assertTrue(draft instanceof TerminalInputConnection);
+        assertTrue((info.inputType & InputType.TYPE_TEXT_FLAG_AUTO_CORRECT) != 0);
+        assertTrue(draft.setComposingText("hel", 1));
+        view.onScreenUpdated();
+        assertEquals("", output(session));
+        assertTrue(draft.commitText("hello ", 1));
+        assertEquals("hello ", output(session));
+    }
+
+    @Test
+    public void alternateScreenTransitionsPreserveDefaultAndCharacterOverride() {
+        for (boolean predictions : new boolean[]{false, true}) {
+            client.predictions = predictions;
+            client.charBased = true;
+            for (String sequence : new String[]{"\u001b[?47h", "\u001b[?47l",
+                    "\u001b[?1049h", "\u001b[?1049l"}) {
+                screenSequence(sequence);
+                EditorInfo info = new EditorInfo();
+                InputConnection connection = view.onCreateInputConnection(info);
+                assertFalse(connection instanceof TerminalInputConnection);
+                assertEquals(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                    | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, info.inputType);
+                assertEquals(EditorInfo.IME_FLAG_NO_FULLSCREEN, info.imeOptions);
+                assertTrue(connection.commitText("x", 1));
+                assertEquals("x", output(session));
+                assertEquals(predictions, client.predictions);
+            }
+        }
+    }
+
     @Test
     public void unicodeSpacePunctuationAndNewlineUseExistingUtf8AndCrTranslation() {
         InputConnection connection = predictive();
@@ -158,6 +258,26 @@ public class TerminalViewImeTest {
         connection.commitText("café😀中文!\n", 1);
         connection.finishComposingText();
         assertEquals("café😀中文!\r", output(session));
+    }
+
+    @Test
+    public void textEnterAtMidDraftSendsFullUtf8TokenBeforeCrAndRetiresTail() {
+        for (String enter : new String[]{"\n", "\r"}) {
+            InputConnection connection = predictive();
+            connection.setComposingText("가", 1);
+            connection.finishComposingText();
+            connection.setSelection(0, 0);
+            connection.setComposingText("나", 1);
+            connection.finishComposingText();
+            assertEquals("가", connection.getTextAfterCursor(10, 0).toString());
+            assertTrue(connection.commitText(enter, 1));
+            assertEquals("나가\r", output(session));
+            assertFalse(connection.commitText("late", 1));
+            view.finishImeInput();
+            assertEquals("", output(session));
+            predictive().commitText("next ", 1);
+            assertEquals("next ", output(session));
+        }
     }
 
     @Test
@@ -189,6 +309,22 @@ public class TerminalViewImeTest {
         view.inputCodePoint(TerminalView.KEY_EVENT_SOURCE_VIRTUAL_KEYBOARD, 'c', false, false);
         assertEquals("plain\u0003", output(session));
         assertFalse(client.ctrl);
+    }
+
+    @Test
+    public void oneShotShiftLeftFinalizesDraftAndPreservesTerminalModifierSequence() {
+        for (boolean alternateScreen : new boolean[]{false, true}) {
+            InputConnection connection = predictive();
+            connection.setComposingText("draft", 1);
+            if (alternateScreen) screenSequence("\u001b[?1049h");
+            client.shift = true;
+            terminalKey(KeyEvent.KEYCODE_DPAD_LEFT, 0);
+            assertEquals("draft\u001b[1;2D", output(session));
+            assertFalse(client.shift);
+            terminalKey(KeyEvent.KEYCODE_DPAD_LEFT, 0);
+            assertEquals("\u001b[D", output(session));
+            if (alternateScreen) screenSequence("\u001b[?1049l");
+        }
     }
 
     @Test
@@ -229,6 +365,39 @@ public class TerminalViewImeTest {
         assertEquals("new", output(next));
         assertFalse(fresh.finishComposingText());
         assertEquals("", output(session));
+    }
+
+    @Test
+    @Config(shadows = NoPtyResize.class)
+    public void sessionSwitchRefreshesModeWithoutWaitingForNewOutput() {
+        client.predictions = true;
+        // Legacy Robolectric graphics do not measure font spacing; use fixed test cell dimensions.
+        ReflectionHelpers.setField(view.mRenderer, "mFontWidth", 8f);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 16);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacingAndAscent", 16);
+        view.layout(0, 0, 800, 600);
+        InputConnection old = predictive();
+        old.setComposingText("draft", 1);
+        TerminalSession tui = newSession();
+        byte[] alternateScreen = "\u001b[?1049h".getBytes(StandardCharsets.UTF_8);
+        tui.getEmulator().append(alternateScreen, alternateScreen.length);
+        assertTrue(view.attachSession(tui));
+        assertEquals("draft", output(session));
+        assertFalse(old.commitText("late", 1));
+        assertFalse((Boolean) ReflectionHelpers.getField(view, "mLastImeSuggestionsEnabled"));
+        InputConnection immediate = view.onCreateInputConnection(new EditorInfo());
+        assertFalse(immediate instanceof TerminalInputConnection);
+        immediate.commitText("n", 1);
+        assertEquals("n", output(tui));
+        assertTrue(view.attachSession(session));
+        assertTrue((Boolean) ReflectionHelpers.getField(view, "mLastImeSuggestionsEnabled"));
+        InputConnection restored = view.onCreateInputConnection(new EditorInfo());
+        assertTrue(restored instanceof TerminalInputConnection);
+        restored.commitText("hello", 1);
+        assertEquals("", output(session));
+        restored.commitText(" ", 1);
+        assertEquals("hello ", output(session));
+        assertEquals("", output(tui));
     }
 
     @Test
@@ -307,6 +476,11 @@ public class TerminalViewImeTest {
         connection.commitText("PRIVATE ", 1);
         terminalKey(KeyEvent.KEYCODE_A, 0);
         assertEquals("PRIVATE a", output(session));
+        assertEquals("", client.logs.toString());
+        screenSequence("\u001b[?1049h");
+        view.onCreateInputConnection(new EditorInfo()).commitText("LOCAL", 1);
+        terminalKey(KeyEvent.KEYCODE_B, 0);
+        assertEquals("LOCALb", output(session));
         assertEquals("", client.logs.toString());
         view.setIsTerminalViewKeyLoggingEnabled(false);
     }

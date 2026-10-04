@@ -426,6 +426,8 @@ public final class TerminalView extends View {
         // Note that IME_ACTION_NONE cannot be used as that makes it impossible to input newlines using the on-screen
         // keyboard on Android TV (see https://github.com/termux/termux-app/issues/221).
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        // A temporary full-screen bypass must not drop the opt-in learning restriction.
+        if (isImeSuggestionsRequested()) outAttrs.imeOptions |= EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
 
         return new BaseInputConnection(this, true) {
 
@@ -532,17 +534,24 @@ public final class TerminalView extends View {
     }
 
     private boolean shouldEnableImeSuggestions() {
+        // Full-screen applications need individual letters for modal key sequences.
+        return isImeSuggestionsRequested()
+            && (mEmulator == null || !mEmulator.isAlternateBufferActive());
+    }
+
+    private boolean isImeSuggestionsRequested() {
         return mClient != null && mClient.isTerminalViewSelected() && mClient.shouldEnableImeSuggestions()
             && !mClient.shouldEnforceCharBasedInput();
     }
 
     private boolean shouldLogTerminalInput() {
         // KeyEvent characters and code-point diagnostics can reveal the same text as commitText.
+        // Keep them suppressed when predictions temporarily pause in the alternate screen.
         return TERMINAL_VIEW_KEY_LOGGING_ENABLED && !mDispatchingImeInput
-            && mPredictiveInputConnection == null && !shouldEnableImeSuggestions();
+            && mPredictiveInputConnection == null && !isImeSuggestionsRequested();
     }
 
-    /** Apply a property reload without restarting the activity or shell sessions. */
+    /** Apply a property or terminal-screen mode change without restarting the activity or sessions. */
     public void updateImeInputMode() {
         boolean enabled = shouldEnableImeSuggestions();
         if (enabled == mLastImeSuggestionsEnabled) return;
@@ -619,6 +628,9 @@ public final class TerminalView extends View {
 
     public void onScreenUpdated(boolean skipScrolling) {
         if (mEmulator == null) return;
+
+        // Entering the alternate screen retires the draft once; leaving restores the opt-in mode.
+        updateImeInputMode();
 
         int rowsInHistory = mEmulator.getScreen().getActiveTranscriptRows();
         if (mTopRow < -rowsInHistory) setTopRow(-rowsInHistory);
@@ -1164,6 +1176,8 @@ public final class TerminalView extends View {
         if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
             mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
             mEmulator = mTermSession.getEmulator();
+            // A cached session may produce no new output after being selected.
+            updateImeInputMode();
             mClient.onEmulatorSet();
 
             // Update mTerminalCursorBlinkerRunnable inner class mEmulator on session change
