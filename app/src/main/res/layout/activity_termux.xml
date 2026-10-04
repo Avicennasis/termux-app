@@ -59,15 +59,6 @@
                         app:tint="?attr/termuxActivityDrawerImageTint" />
                 </LinearLayout>
 
-                <ListView
-                    android:id="@+id/terminal_sessions_list"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_gravity="top"
-                    android:layout_weight="1"
-                    android:choiceMode="singleChoice"
-                    android:longClickable="true" />
-
                 <LinearLayout
                     style="?android:attr/buttonBarStyle"
                     android:layout_width="match_parent"
@@ -90,6 +81,15 @@
                         android:layout_weight="1"
                         android:text="@string/action_new_session" />
                 </LinearLayout>
+
+                <ListView
+                    android:id="@+id/terminal_sessions_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_gravity="top"
+                    android:layout_weight="1"
+                    android:choiceMode="singleChoice"
+                    android:longClickable="true" />
             </LinearLayout>
 
         </androidx.drawerlayout.widget.DrawerLayout>

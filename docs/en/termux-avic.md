@@ -1,7 +1,7 @@
 # Termux-Avic personal distribution
 
 This branch uses the actual Termux app, TermuxActivity, native PTY, sessions,
-first-run bootstrap installer, settings, launcher/adaptive icons and default
+first-run bootstrap installer, settings, launcher/adaptive icons and configurable
 extra keys. It contains the existing optional predictive-input implementation;
 the separate IME fixture and its dashboard are not part of this app.
 
@@ -37,15 +37,30 @@ property and running `termux-reload-settings` also works.
 Only the current unsent token is editable. Letters wait for a boundary or
 terminal control action; earlier words cannot be retroactively corrected.
 `enforce-char-based-input=true` takes precedence without being changed by the
-switch. Disable predictions before secrets, private commands, vim command
-mode, games or applications needing immediate character input. A preview can
-appear even in a program that disables terminal echo.
+switch. Predictions pause automatically in the alternate screen used by Zellij
+and full-screen editors, including shells inside Zellij, then resume on exit.
+Disable predictions before secrets, private commands or applications that need
+immediate characters while using the main terminal screen. A preview can appear
+even in a program that disables terminal echo.
 
 The keyboard sees enabled-mode typed input. NO_PERSONALIZED_LEARNING remains
 requested, but keyboards can ignore it. Terminal output/history is never sent
 to the keyboard. See [the feature guidance](terminal-ime-suggestions.md) for
 the full limitations. Floating Gboard can cover extra keys at arbitrary
 positions; reposition or dock it. No universal overlap-free claim is made.
+
+## Drawer and Shift key
+
+Keyboard and New Session are at the top of the session drawer, below Settings,
+away from the bottom extra-key row. Their normal tap and long-press actions are
+retained.
+
+The default second extra-key row includes `SHIFT`, after `ALT`. Tap Shift, then
+Left Arrow to send Shift+Left (`ESC [ 1 ; 2 D`) to applications such as Codex.
+The modifier is consumed by the next key; long-press Shift to lock it for repeated
+modified keys, then tap it again to unlock. Other default keys and the `-`/`|`
+popup remain available. A custom `extra-keys` property overrides this default;
+add `'SHIFT'` to your chosen row and run `termux-reload-settings` if you use one.
 
 ## Packages and bootstrap
 
