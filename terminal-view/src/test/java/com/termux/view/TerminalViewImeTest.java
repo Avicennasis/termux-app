@@ -17,6 +17,8 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.lang.reflect.Proxy;
@@ -28,6 +30,14 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = {23, 36}, manifest = Config.NONE)
 public class TerminalViewImeTest {
+
+    /** These sessions have no PTY; keep real View layout and emulator resize in the lifecycle test. */
+    @Implements(className = "com.termux.terminal.JNI", isInAndroidSdk = false)
+    public static class NoPtyResize {
+        @Implementation protected static void __staticInitializer__() {}
+        @Implementation protected static void setPtyWindowSize(int fd, int rows, int columns,
+                                                               int cellWidth, int cellHeight) {}
+    }
 
     static class Client implements TerminalViewClient {
         boolean predictions;
@@ -167,6 +177,7 @@ public class TerminalViewImeTest {
         InputConnection connection = view.onCreateInputConnection(info);
         assertFalse(connection instanceof TerminalInputConnection);
         assertEquals(InputType.TYPE_NULL, info.inputType);
+        assertTrue((info.imeOptions & EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0);
         client.ctrl = true;
         assertTrue(connection.commitText("g", 1));
         assertEquals("\u0007", output(session));
@@ -232,6 +243,7 @@ public class TerminalViewImeTest {
                 assertFalse(connection instanceof TerminalInputConnection);
                 assertEquals(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
                     | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, info.inputType);
+                assertEquals(EditorInfo.IME_FLAG_NO_FULLSCREEN, info.imeOptions);
                 assertTrue(connection.commitText("x", 1));
                 assertEquals("x", output(session));
                 assertEquals(predictions, client.predictions);
@@ -353,6 +365,39 @@ public class TerminalViewImeTest {
         assertEquals("new", output(next));
         assertFalse(fresh.finishComposingText());
         assertEquals("", output(session));
+    }
+
+    @Test
+    @Config(shadows = NoPtyResize.class)
+    public void sessionSwitchRefreshesModeWithoutWaitingForNewOutput() {
+        client.predictions = true;
+        // Legacy Robolectric graphics do not measure font spacing; use fixed test cell dimensions.
+        ReflectionHelpers.setField(view.mRenderer, "mFontWidth", 8f);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 16);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacingAndAscent", 16);
+        view.layout(0, 0, 800, 600);
+        InputConnection old = predictive();
+        old.setComposingText("draft", 1);
+        TerminalSession tui = newSession();
+        byte[] alternateScreen = "\u001b[?1049h".getBytes(StandardCharsets.UTF_8);
+        tui.getEmulator().append(alternateScreen, alternateScreen.length);
+        assertTrue(view.attachSession(tui));
+        assertEquals("draft", output(session));
+        assertFalse(old.commitText("late", 1));
+        assertFalse((Boolean) ReflectionHelpers.getField(view, "mLastImeSuggestionsEnabled"));
+        InputConnection immediate = view.onCreateInputConnection(new EditorInfo());
+        assertFalse(immediate instanceof TerminalInputConnection);
+        immediate.commitText("n", 1);
+        assertEquals("n", output(tui));
+        assertTrue(view.attachSession(session));
+        assertTrue((Boolean) ReflectionHelpers.getField(view, "mLastImeSuggestionsEnabled"));
+        InputConnection restored = view.onCreateInputConnection(new EditorInfo());
+        assertTrue(restored instanceof TerminalInputConnection);
+        restored.commitText("hello", 1);
+        assertEquals("", output(session));
+        restored.commitText(" ", 1);
+        assertEquals("hello ", output(session));
+        assertEquals("", output(tui));
     }
 
     @Test

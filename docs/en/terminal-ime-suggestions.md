@@ -80,7 +80,9 @@ multi-step key sequences in Zellij and command modes in editors. Entering that
 screen finalizes the pending draft once; leaving restores predictions if the
 property is still enabled. The property itself is not changed. Predictions also
 pause in shells inside Zellij: Termux sees the multiplexer's screen, not its
-individual panes or keybinding modes.
+individual panes or keybinding modes. The no-personalized-learning request remains
+set during this temporary pause. Switching sessions also applies the selected
+screen's input mode without waiting for new terminal output.
 
 The draft is limited to 4096 UTF-16 units. Oversized composition updates are
 rejected atomically; oversized ordinary commits are finalized rather than kept
