@@ -532,17 +532,24 @@ public final class TerminalView extends View {
     }
 
     private boolean shouldEnableImeSuggestions() {
+        // Full-screen applications need individual letters for modal key sequences.
+        return isImeSuggestionsRequested()
+            && (mEmulator == null || !mEmulator.isAlternateBufferActive());
+    }
+
+    private boolean isImeSuggestionsRequested() {
         return mClient != null && mClient.isTerminalViewSelected() && mClient.shouldEnableImeSuggestions()
             && !mClient.shouldEnforceCharBasedInput();
     }
 
     private boolean shouldLogTerminalInput() {
         // KeyEvent characters and code-point diagnostics can reveal the same text as commitText.
+        // Keep them suppressed when predictions temporarily pause in the alternate screen.
         return TERMINAL_VIEW_KEY_LOGGING_ENABLED && !mDispatchingImeInput
-            && mPredictiveInputConnection == null && !shouldEnableImeSuggestions();
+            && mPredictiveInputConnection == null && !isImeSuggestionsRequested();
     }
 
-    /** Apply a property reload without restarting the activity or shell sessions. */
+    /** Apply a property or terminal-screen mode change without restarting the activity or sessions. */
     public void updateImeInputMode() {
         boolean enabled = shouldEnableImeSuggestions();
         if (enabled == mLastImeSuggestionsEnabled) return;
@@ -619,6 +626,9 @@ public final class TerminalView extends View {
 
     public void onScreenUpdated(boolean skipScrolling) {
         if (mEmulator == null) return;
+
+        // Entering the alternate screen retires the draft once; leaving restores the opt-in mode.
+        updateImeInputMode();
 
         int rowsInHistory = mEmulator.getScreen().getActiveTranscriptRows();
         if (mTopRow < -rowsInHistory) setTopRow(-rowsInHistory);

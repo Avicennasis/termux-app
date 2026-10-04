@@ -74,6 +74,14 @@ change finalizes to the old session and retires its input connection; late IME
 callbacks cannot type into the next session. Background output only redraws the
 preview and never becomes IME text.
 
+Predictions automatically pause while the terminal's alternate screen is active,
+so full-screen applications receive ordinary letters immediately. This supports
+multi-step key sequences in Zellij and command modes in editors. Entering that
+screen finalizes the pending draft once; leaving restores predictions if the
+property is still enabled. The property itself is not changed. Predictions also
+pause in shells inside Zellij: Termux sees the multiplexer's screen, not its
+individual panes or keybinding modes.
+
 The draft is limited to 4096 UTF-16 units. Oversized composition updates are
 rejected atomically; oversized ordinary commits are finalized rather than kept
 for later correction. Long previews wrap inside the terminal and are clipped
@@ -101,10 +109,11 @@ must be checked on a physical device. No setting silently enables personalized
 learning. Predictions, glide input, voice input, and language-specific replacement
 protocols are compatibility expectations to verify, not guarantees for every IME.
 
-Use ordinary mode in `vim` command mode, games, or other programs that require
-letters to arrive immediately. Extra-key terminal controls remain immediate
-after finalizing the draft, but buffering words changes the timing of ordinary
-letters. Editing already echoed words, reconverting earlier CJK text, fullscreen
+Full-screen applications using the alternate screen automatically use ordinary
+input. Disable predictions for games or other programs that require immediate
+letters while using the main terminal screen. Extra-key terminal controls remain
+immediate after finalizing the draft, but buffering words changes the timing of
+ordinary letters. Editing already echoed words, reconverting earlier CJK text, fullscreen
 IME editors, handwriting cursor geometry, and correction of text already sent to
 the PTY are outside the local draft's contract.
 
