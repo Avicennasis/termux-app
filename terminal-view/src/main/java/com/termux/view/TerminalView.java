@@ -69,6 +69,8 @@ public final class TerminalView extends View {
     private boolean mWritingImeDraft;
     private boolean mLastImeSuggestionsEnabled;
     private boolean mImeRestartPending;
+    /** A menu can temporarily own window focus while changing to immediate input. */
+    private boolean mImeRestartDeferred;
 
     private TextSelectionCursorController mTextSelectionCursorController;
 
@@ -693,7 +695,11 @@ public final class TerminalView extends View {
         mImeRestartPending = true;
         post(() -> {
             mImeRestartPending = false;
-            if (!hasFocus() || !hasWindowFocus()) return;
+            if (!hasFocus() || !hasWindowFocus()) {
+                mImeRestartDeferred = true;
+                return;
+            }
+            mImeRestartDeferred = false;
             // Window focus can bind a new connection before this queued restart runs.
             // Do not restart that fresh binding while Android is still attaching its IME.
             if (mPredictiveInputConnection != null && mPredictiveInputConnection.isActive()) return;
@@ -706,14 +712,14 @@ public final class TerminalView extends View {
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         if (!gainFocus) finishImeInput();
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
-        if (gainFocus && shouldEnableImeSuggestions()) requestImeRestart();
+        if (gainFocus && (shouldEnableImeSuggestions() || mImeRestartDeferred)) requestImeRestart();
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         if (!hasWindowFocus) finishImeInput();
         super.onWindowFocusChanged(hasWindowFocus);
-        if (hasWindowFocus && shouldEnableImeSuggestions()) requestImeRestart();
+        if (hasWindowFocus && (shouldEnableImeSuggestions() || mImeRestartDeferred)) requestImeRestart();
     }
 
     @Override

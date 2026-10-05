@@ -147,8 +147,8 @@ JAVA_HOME=/tmp/termux-ime-tools/jdk-21.0.12.1+1 ./gradlew test
 scripts/avic/build-apk.sh /ABSOLUTE/OUTPUT/termux-avic.apk
 ```
 
-Increment `TERMUX_AVIC_VERSION_CODE` for future updates (the current default is
-1001), and set `TERMUX_APP_VERSION_NAME` when changing the release name. The
+Set `TERMUX_AVIC_VERSION_CODE` above the highest installed code for future
+updates, and set `TERMUX_APP_VERSION_NAME` when changing the release name. The
 build checks the bootstrap checksum before compiling and verifies that the
 finished APK embeds exactly that archive. A generated assembly dependency
 header ensures that incremental NDK builds notice bootstrap changes.

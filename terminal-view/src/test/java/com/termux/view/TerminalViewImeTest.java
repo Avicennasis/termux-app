@@ -1,12 +1,15 @@
 package com.termux.view;
 
+import android.app.Activity;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
@@ -16,11 +19,15 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.Robolectric;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.util.ReflectionHelpers;
+import org.robolectric.shadows.ShadowInputMethodManager;
+import org.robolectric.shadows.ShadowLooper;
 
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +45,12 @@ public class TerminalViewImeTest {
         @Implementation protected static void __staticInitializer__() {}
         @Implementation protected static void setPtyWindowSize(int fd, int rows, int columns,
                                                                int cellWidth, int cellHeight) {}
+    }
+
+    @Implements(InputMethodManager.class)
+    public static class RestartTracker extends ShadowInputMethodManager {
+        static int restarts;
+        @Implementation protected void restartInput(View target) { restarts++; }
     }
 
     static class Client implements TerminalViewClient {
@@ -552,6 +565,43 @@ public class TerminalViewImeTest {
         assertFalse(bound.setComposingText("late", 1));
         assertTrue(fresh.commitText("fresh ", 1));
         assertEquals("fresh ", output(session));
+    }
+
+    @Test
+    @Config(shadows = {NoPtyResize.class, RestartTracker.class})
+    public void menuModeChangeRebindsImmediateKeysWhenWindowFocusReturns() {
+        ReflectionHelpers.setField(view.mRenderer, "mFontWidth", 8f);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 16);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacingAndAscent", 16);
+        ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).setup().visible();
+        activity.get().setContentView(view);
+        view.setFocusableInTouchMode(true);
+        assertTrue(view.requestFocus());
+        activity.windowFocusChanged(true);
+        ShadowLooper.idleMainLooper();
+        InputConnection old = predictive();
+        old.setComposingText("word", 1);
+        RestartTracker.restarts = 0;
+
+        // A context menu owns window focus while its action selects immediate Keys.
+        activity.windowFocusChanged(false);
+        client.paused = true;
+        view.updateImeInputMode();
+        ShadowLooper.idleMainLooper();
+        assertEquals(0, RestartTracker.restarts);
+        assertEquals("word", output(session));
+        assertFalse(old.commitText("late", 1));
+
+        activity.windowFocusChanged(true);
+        ShadowLooper.idleMainLooper();
+        assertEquals(1, RestartTracker.restarts);
+        EditorInfo info = new EditorInfo();
+        InputConnection keys = view.onCreateInputConnection(info);
+        assertEquals(InputType.TYPE_NULL, info.inputType);
+        assertTrue((info.imeOptions & EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0);
+        assertTrue(keys.commitText("n", 1));
+        assertEquals("n", output(session));
+        activity.pause().stop().destroy();
     }
 
     @Test
