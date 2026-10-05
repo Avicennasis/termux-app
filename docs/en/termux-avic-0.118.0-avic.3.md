@@ -53,9 +53,11 @@ The VM APK is the full stock-package app with the same terminal-input source,
 exact personal drawer XML and Shift default. It is not the arm64 custom-prefix
 personal APK. The personal release was separately built, signed, manifest-audited
 and verified to embed the exact existing custom-prefix bootstrap archive. No new
-fixture testing is claimed. The S24 was disconnected: installation and physical
-validation of this release remain pending. Earlier S24 results belong to .2 and
-do not establish .3 hardware behavior. Floating Gboard can still cover controls
+fixture testing is claimed. At initial delivery the S24 was disconnected. A later
+physical .3 recheck passed the input cases but exposed clipped drawer actions with
+tall Gboard in landscape. [.4](termux-avic-0.118.0-avic.4.md) fixes that layout and
+documents the production rechecks and their limits. Earlier S24 results belong to
+.2. Floating Gboard can still cover controls
 at arbitrary positions; no universal overlap-free claim is made.
 
 ## Delivery

@@ -51,7 +51,7 @@ positions; reposition or dock it. No universal overlap-free claim is made.
 
 ## Drawer and Shift key
 
-Keyboard and New Session are at the top of the session drawer, below Settings,
+Settings, Keyboard and New Session share one row at the top of the session drawer,
 away from the bottom extra-key row. Their normal tap and long-press actions are
 retained.
 
