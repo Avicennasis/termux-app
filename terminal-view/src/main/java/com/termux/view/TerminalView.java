@@ -62,6 +62,8 @@ public final class TerminalView extends View {
     public TerminalViewClient mClient;
 
     private TerminalInputConnection mPredictiveInputConnection;
+    /** Stock character-mode composition, shared across Android binding probes in temporary Keys mode. */
+    private Editable mImmediateImeDraft;
     private int mImeInputGeneration;
     private boolean mDispatchingImeInput;
     private boolean mWritingImeDraft;
@@ -303,6 +305,7 @@ public final class TerminalView extends View {
 
         // Finish against the OLD session and retire its connection before changing targets.
         finishImeInput();
+        mImeInputGeneration++;
 
         mTermSession = session;
         mEmulator = null;
@@ -324,6 +327,7 @@ public final class TerminalView extends View {
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
         mLastImeSuggestionsEnabled = shouldEnableImeSuggestions();
         if (mLastImeSuggestionsEnabled) {
+            finishImmediateImeDraft();
             // IMMS may request a connection then discard it after discovering an existing
             // binding. Creating one must not close the connection the keyboard still uses.
             Editable draft = mPredictiveInputConnection == null ? new SpannableStringBuilder()
@@ -429,20 +433,93 @@ public final class TerminalView extends View {
         // A temporary full-screen bypass must not drop the opt-in learning restriction.
         if (isImeSuggestionsRequested()) outAttrs.imeOptions |= EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
 
+        final boolean guardedKeys = isImeSuggestionsRequested();
+        final Editable keyDraft;
+        if (guardedKeys) {
+            if (mImmediateImeDraft == null) {
+                mImmediateImeDraft = new SpannableStringBuilder();
+                Selection.setSelection(mImmediateImeDraft, 0);
+            }
+            keyDraft = mImmediateImeDraft;
+        } else {
+            keyDraft = null;
+        }
+        final TerminalSession keySession = mTermSession;
+        final int keyGeneration = mImeInputGeneration;
         return new BaseInputConnection(this, true) {
+            private boolean closed;
+
+            private boolean isCurrent() {
+                return !guardedKeys || (!closed && keySession == mTermSession
+                    && keyGeneration == mImeInputGeneration && !shouldEnableImeSuggestions());
+            }
+
+            @Override
+            public Editable getEditable() { return guardedKeys ? keyDraft : super.getEditable(); }
+
+            private void sendContent() {
+                Editable content = getEditable();
+                String text = content.toString();
+                content.clear();
+                boolean wasDispatching = mDispatchingImeInput;
+                mDispatchingImeInput = true;
+                try {
+                    sendTextToTerminal(text, true);
+                } finally {
+                    mDispatchingImeInput = wasDispatching;
+                }
+            }
+
+            @Override
+            public boolean setComposingText(CharSequence text, int newCursorPosition) {
+                return isCurrent() && super.setComposingText(text, newCursorPosition);
+            }
+
+            @Override
+            public boolean sendKeyEvent(KeyEvent event) {
+                if (!isCurrent()) return false;
+                if (!guardedKeys) return super.sendKeyEvent(event);
+                if (event.getAction() == KeyEvent.ACTION_DOWN && !KeyEvent.isModifierKey(event.getKeyCode()))
+                    sendContent();
+                boolean wasDispatching = mDispatchingImeInput;
+                mDispatchingImeInput = true;
+                try {
+                    return super.sendKeyEvent(event);
+                } finally {
+                    mDispatchingImeInput = wasDispatching;
+                }
+            }
+
+            @Override
+            public void closeConnection() {
+                if (!guardedKeys) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) super.closeConnection();
+                    return;
+                }
+                if (closed) return;
+                // A discarded binding probe must not flush/clear another binding's editor.
+                // The view finalizes this shared draft at explicit lifecycle boundaries.
+                closed = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) super.closeConnection();
+            }
 
             @Override
             public boolean finishComposingText() {
+                if (!isCurrent()) return false;
                 if (shouldLogTerminalInput()) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
                 super.finishComposingText();
 
-                sendTextToTerminal(getEditable(), true);
-                getEditable().clear();
+                if (guardedKeys) sendContent();
+                else {
+                    sendTextToTerminal(getEditable(), true);
+                    getEditable().clear();
+                }
                 return true;
             }
 
             @Override
             public boolean commitText(CharSequence text, int newCursorPosition) {
+                if (!isCurrent()) return false;
                 if (shouldLogTerminalInput()) {
                     mClient.logInfo(LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
                 }
@@ -450,14 +527,18 @@ public final class TerminalView extends View {
 
                 if (mEmulator == null) return true;
 
-                Editable content = getEditable();
-                sendTextToTerminal(content, true);
-                content.clear();
+                if (guardedKeys) sendContent();
+                else {
+                    Editable content = getEditable();
+                    sendTextToTerminal(content, true);
+                    content.clear();
+                }
                 return true;
             }
 
             @Override
             public boolean deleteSurroundingText(int leftLength, int rightLength) {
+                if (!isCurrent()) return false;
                 if (shouldLogTerminalInput()) {
                     mClient.logInfo(LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
                 }
@@ -533,10 +614,10 @@ public final class TerminalView extends View {
         }
     }
 
-    private boolean shouldEnableImeSuggestions() {
-        // Full-screen applications need individual letters for modal key sequences.
-        return isImeSuggestionsRequested()
-            && (mEmulator == null || !mEmulator.isAlternateBufferActive());
+    public boolean shouldEnableImeSuggestions() {
+        return isImeSuggestionsRequested() && !mClient.shouldPauseImeSuggestions()
+            && (mEmulator == null || !mEmulator.isAlternateBufferActive()
+                || mClient.shouldEnableImeSuggestionsInAlternateScreen());
     }
 
     private boolean isImeSuggestionsRequested() {
@@ -554,8 +635,12 @@ public final class TerminalView extends View {
     /** Apply a property or terminal-screen mode change without restarting the activity or sessions. */
     public void updateImeInputMode() {
         boolean enabled = shouldEnableImeSuggestions();
+        if (mClient != null) mClient.onImeInputModeChanged();
         if (enabled == mLastImeSuggestionsEnabled) return;
+        boolean hadPredictiveConnection = mPredictiveInputConnection != null;
         closePredictiveInputConnection();
+        finishImmediateImeDraft();
+        if (!hadPredictiveConnection) mImeInputGeneration++;
         mLastImeSuggestionsEnabled = enabled;
         requestImeRestart();
     }
@@ -563,11 +648,35 @@ public final class TerminalView extends View {
     /** Finalize local input before an action that bypasses the IME, without consuming modifiers. */
     public void finishImeInput() {
         if (mDispatchingImeInput) return;
+        boolean hadImmediateDraft = mImmediateImeDraft != null;
+        finishImmediateImeDraft();
         if (mPredictiveInputConnection != null) {
             closePredictiveInputConnection();
             requestImeRestart();
-        } else if (shouldEnableImeSuggestions()) {
+        } else if (hadImmediateDraft || shouldEnableImeSuggestions()) {
             requestImeRestart();
+        }
+    }
+
+    private void finishImmediateImeDraft() {
+        Editable draft = mImmediateImeDraft;
+        if (draft == null) return;
+        mImmediateImeDraft = null;
+        mImeInputGeneration++;
+        String text = draft.toString();
+        draft.clear();
+        draft.clearSpans();
+        Selection.setSelection(draft, 0);
+        boolean wasDispatching = mDispatchingImeInput;
+        boolean wasWritingDraft = mWritingImeDraft;
+        mDispatchingImeInput = true;
+        mWritingImeDraft = true;
+        try {
+            // Composed before a newly selected modifier; preserve it for the next action.
+            sendTextToTerminal(text, false);
+        } finally {
+            mDispatchingImeInput = wasDispatching;
+            mWritingImeDraft = wasWritingDraft;
         }
     }
 
@@ -1087,6 +1196,7 @@ public final class TerminalView extends View {
 
             // If left alt, send escape before the code point to make e.g. Alt+B and Alt+F work in readline:
             mTermSession.writeCodePoint(altDown, codePoint);
+            mClient.onTerminalCodePointSent(mTermSession, codePoint, altDown);
         }
     }
 

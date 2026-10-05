@@ -188,6 +188,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_HELP_ID = 7;
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
     private static final int CONTEXT_MENU_REPORT_ID = 9;
+    private static final int CONTEXT_MENU_IME_MODE_ID = 12;
 
     private static final String ARG_TERMINAL_TOOLBAR_TEXT_INPUT = "terminal_toolbar_text_input";
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
@@ -636,6 +637,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         boolean autoFillEnabled = mTerminalView.isAutoFillEnabled();
 
+        if (mProperties.isTerminalImeSuggestionsEnabled() && !mProperties.isEnforcingCharBasedInput())
+            menu.add(Menu.NONE, CONTEXT_MENU_IME_MODE_ID, Menu.NONE,
+                mTerminalView.shouldEnableImeSuggestions() ? R.string.termux_ime_select_keys
+                    : R.string.termux_ime_select_text);
+
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url);
         menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
         if (!DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText()))
@@ -665,6 +671,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         TerminalSession session = getCurrentSession();
 
         switch (item.getItemId()) {
+            case CONTEXT_MENU_IME_MODE_ID:
+                mTermuxTerminalViewClient.toggleImeInputMode();
+                return true;
             case CONTEXT_MENU_SELECT_URL_ID:
                 mTermuxTerminalViewClient.showUrlSelection();
                 return true;
@@ -975,6 +984,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mExtraKeysView != null) {
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
                 mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
+                mTermuxTerminalExtraKeys.updateImeModeButtons();
             }
 
             // Update NightMode.APP_NIGHT_MODE

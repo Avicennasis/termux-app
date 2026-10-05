@@ -8,11 +8,15 @@ import androidx.annotation.NonNull;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.termux.app.TermuxActivity;
+import com.termux.R;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalViewClient;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
 import com.termux.shared.termux.extrakeys.ExtraKeysInfo;
+import com.termux.shared.termux.extrakeys.ExtraKeyButton;
+import com.termux.shared.termux.extrakeys.ExtraKeysView;
+import com.google.android.material.button.MaterialButton;
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
 import com.termux.shared.termux.terminal.io.TerminalExtraKeys;
@@ -81,10 +85,35 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         return mExtraKeysInfo;
     }
 
+    /** Keep the IME key's label in sync without reloading or clearing modifier buttons. */
+    public void updateImeModeButtons() {
+        ExtraKeysView keys = mActivity.getExtraKeysView();
+        if (keys == null || mExtraKeysInfo == null) return;
+        boolean available = mActivity.getProperties().isTerminalImeSuggestionsEnabled()
+            && !mActivity.getProperties().isEnforcingCharBasedInput();
+        boolean text = available && mActivity.getTerminalView().shouldEnableImeSuggestions();
+        int label = !available ? R.string.termux_ime_mode_off
+            : text ? R.string.termux_ime_mode_text : R.string.termux_ime_mode_keys;
+        int description = !available ? R.string.termux_ime_mode_unavailable
+            : text ? R.string.termux_ime_mode_text_description : R.string.termux_ime_mode_keys_description;
+        int index = 0;
+        for (ExtraKeyButton[] row : mExtraKeysInfo.getMatrix()) {
+            for (ExtraKeyButton info : row) {
+                View child = keys.getChildAt(index++);
+                if (!info.isMacro() && "IME".equals(info.getKey()) && child instanceof MaterialButton) {
+                    ((MaterialButton) child).setText(label);
+                    child.setContentDescription(mActivity.getString(description));
+                }
+            }
+        }
+    }
+
     @SuppressLint("RtlHardcoded")
     @Override
     public void onTerminalExtraKeyButtonClick(View view, String key, boolean ctrlDown, boolean altDown, boolean shiftDown, boolean fnDown) {
-        if ("KEYBOARD".equals(key)) {
+        if ("IME".equals(key)) {
+            if (mTermuxTerminalViewClient != null) mTermuxTerminalViewClient.toggleImeInputMode();
+        } else if ("KEYBOARD".equals(key)) {
             if(mTermuxTerminalViewClient != null)
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
         } else if ("DRAWER".equals(key)) {

@@ -37,8 +37,10 @@ property and running `termux-reload-settings` also works.
 Only the current unsent token is editable. Letters wait for a boundary or
 terminal control action; earlier words cannot be retroactively corrected.
 `enforce-char-based-input=true` takes precedence without being changed by the
-switch. Predictions pause automatically in the alternate screen used by Zellij
-and full-screen editors, including shells inside Zellij, then resume on exit.
+switch. Full-screen applications start in immediate Keys mode. Tap the Text/Keys
+extra key to select predictive Text in Zellij shell panes; Ctrl+G selects Keys for
+modal shortcuts, and a tap returns to Text. Each session retains its choice through
+rotation. Entering or leaving the alternate screen restores the safe default.
 Disable predictions before secrets, private commands or applications that need
 immediate characters while using the main terminal screen. A preview can appear
 even in a program that disables terminal echo.

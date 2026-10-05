@@ -1,6 +1,7 @@
 package com.termux.view;
 
 import android.graphics.Typeface;
+import android.os.Build;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -46,9 +47,13 @@ public class TerminalViewImeTest {
         boolean ctrl;
         boolean alt;
         boolean shift;
+        boolean alternateText;
+        boolean paused;
         final StringBuilder logs = new StringBuilder();
 
         public boolean shouldEnableImeSuggestions() { return predictions; }
+        public boolean shouldEnableImeSuggestionsInAlternateScreen() { return alternateText; }
+        public boolean shouldPauseImeSuggestions() { return paused; }
         public boolean shouldEnforceCharBasedInput() { return charBased; }
         public boolean isTerminalViewSelected() { return selected; }
         public boolean hasTerminalInputModifiers() { return ctrl || alt || shift; }
@@ -249,6 +254,103 @@ public class TerminalViewImeTest {
                 assertEquals(predictions, client.predictions);
             }
         }
+    }
+
+    @Test
+    public void explicitAlternateTextKeepsEditablePredictionsAndKeysSwitchRetiresCallbacks() {
+        client.alternateText = true;
+        screenSequence("\u001b[?1049h");
+        InputConnection text = predictive();
+        assertTrue(text.setComposingText("wprld", 1));
+        assertEquals("", output(session));
+        assertTrue(text.commitText("world ", 1));
+        assertEquals("world ", output(session));
+        assertTrue(text.setComposingText("draft", 1));
+        client.paused = true;
+        view.updateImeInputMode();
+        assertEquals("draft", output(session));
+        assertFalse(text.commitText("late", 1));
+        EditorInfo info = new EditorInfo();
+        InputConnection keys = view.onCreateInputConnection(info);
+        assertEquals(InputType.TYPE_NULL, info.inputType);
+        assertTrue((info.imeOptions & EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0);
+        assertTrue(keys.commitText("t", 1));
+        assertEquals("t", output(session));
+        assertTrue(keys.commitText("n", 1));
+        assertEquals("n", output(session));
+        client.paused = false;
+        view.updateImeInputMode();
+        assertFalse(keys.commitText("stale", 1));
+        assertFalse(keys.setComposingText("stale", 1));
+        assertFalse(keys.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_T)));
+        assertEquals("", output(session));
+        InputConnection restored = predictive();
+        restored.setComposingText("hel", 1);
+        assertEquals("", output(session));
+        restored.commitText("hello ", 1);
+        assertEquals("hello ", output(session));
+    }
+
+    @Test
+    public void explicitTextCannotOverrideOptInOrCharacterInputAndKeysSuppressInputLogs() {
+        client.alternateText = true;
+        screenSequence("\u001b[?1049h");
+        assertFalse(view.onCreateInputConnection(new EditorInfo()) instanceof TerminalInputConnection);
+        client.predictions = true;
+        client.charBased = true;
+        assertFalse(view.onCreateInputConnection(new EditorInfo()) instanceof TerminalInputConnection);
+        client.charBased = false;
+        client.paused = true;
+        view.setIsTerminalViewKeyLoggingEnabled(true);
+        InputConnection keys = view.onCreateInputConnection(new EditorInfo());
+        keys.commitText("synthetic", 1);
+        terminalKey(KeyEvent.KEYCODE_N, 0);
+        assertEquals("syntheticn", output(session));
+        assertEquals("", client.logs.toString());
+    }
+
+    @Test
+    public void keysCompositionSurvivesDiscardedProbeAndFinalizesBeforeTextWithoutStealingCtrl() {
+        client.predictions = true;
+        client.paused = true;
+        InputConnection keys = view.onCreateInputConnection(new EditorInfo());
+        assertTrue(keys.setComposingText("한", 1));
+        InputConnection discarded = view.onCreateInputConnection(new EditorInfo());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) discarded.closeConnection();
+        assertEquals("한", keys.getTextBeforeCursor(10, 0).toString());
+        assertTrue(keys.setComposingText("한글", 1));
+        assertEquals("", output(session));
+        client.ctrl = true;
+        client.paused = false;
+        view.updateImeInputMode();
+        assertEquals("한글", output(session));
+        assertTrue(client.ctrl);
+        assertFalse(keys.commitText("late", 1));
+        assertFalse(discarded.finishComposingText());
+        assertEquals("", output(session));
+        InputConnection text = view.onCreateInputConnection(new EditorInfo());
+        assertTrue(text.commitText("c", 1));
+        assertEquals("\u0003", output(session));
+        assertFalse(client.ctrl);
+    }
+
+    @Test
+    @Config(shadows = NoPtyResize.class)
+    public void keysCallbacksCannotFollowASessionSwitchOrBecomeValidAfterSwitchingBack() {
+        client.predictions = true;
+        client.paused = true;
+        ReflectionHelpers.setField(view.mRenderer, "mFontWidth", 8f);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacing", 16);
+        ReflectionHelpers.setField(view.mRenderer, "mFontLineSpacingAndAscent", 16);
+        view.layout(0, 0, 800, 600);
+        InputConnection keys = view.onCreateInputConnection(new EditorInfo());
+        TerminalSession next = newSession();
+        view.attachSession(next);
+        assertFalse(keys.commitText("late", 1));
+        view.attachSession(session);
+        assertFalse(keys.commitText("late", 1));
+        assertEquals("", output(next));
+        assertEquals("", output(session));
     }
 
     @Test

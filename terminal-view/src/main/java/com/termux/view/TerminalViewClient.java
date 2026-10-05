@@ -37,6 +37,18 @@ public interface TerminalViewClient {
         return false;
     }
 
+    /** A host may offer an explicit Text/Keys choice without changing the opt-in property. */
+    default boolean shouldPauseImeSuggestions() { return false; }
+
+    /** Full-screen input remains immediate unless the host explicitly opts into text entry. */
+    default boolean shouldEnableImeSuggestionsInAlternateScreen() { return false; }
+
+    /** Notify the host after a code point actually reaches this session, not a local shortcut. */
+    default void onTerminalCodePointSent(TerminalSession session, int codePoint, boolean altDown) {}
+
+    /** Refresh a host's input-mode control after property, screen or session changes. */
+    default void onImeInputModeChanged() {}
+
     /** Peek at terminal modifiers without consuming one-shot extra-key state. */
     default boolean hasTerminalInputModifiers() {
         return false;

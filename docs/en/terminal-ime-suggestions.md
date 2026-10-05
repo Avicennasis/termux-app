@@ -74,15 +74,36 @@ change finalizes to the old session and retires its input connection; late IME
 callbacks cannot type into the next session. Background output only redraws the
 preview and never becomes IME text.
 
-Predictions automatically pause while the terminal's alternate screen is active,
-so full-screen applications receive ordinary letters immediately. This supports
-multi-step key sequences in Zellij and command modes in editors. Entering that
-screen finalizes the pending draft once; leaving restores predictions if the
-property is still enabled. The property itself is not changed. Predictions also
-pause in shells inside Zellij: Termux sees the multiplexer's screen, not its
-individual panes or keybinding modes. The no-personalized-learning request remains
-set during this temporary pause. Switching sessions also applies the selected
-screen's input mode without waiting for new terminal output.
+Full-screen applications start in **Keys** mode, which sends letters immediately.
+Termux-Avic's extra key at the right of the first row shows the current mode:
+**Text** for predictive token editing, **Keys** for immediate terminal input.
+Tap it to switch. After entering Zellij, tap **Keys** once to select **Text** for
+shell panes. Pressing **Ctrl+G** while Text is active in the alternate screen
+selects Keys before the following command letters. For example, Ctrl+G, t, n can
+create a Zellij tab without buffering t or n. Tap Keys to return to Text afterward.
+Keys stays selected throughout pauses and longer sequences; there is no timeout
+or guessed key count. Other Ctrl and Alt shortcuts retain their existing behavior.
+
+The choices belong to each Termux session and survive activity recreation and
+rotation. Entering or leaving the alternate screen restores the safe default:
+Keys in the alternate screen and Text in the main screen. Changes finalize the
+pending draft once and retire the old keyboard connection. The opt-in property
+and no-personalized-learning request are preserved. Default/off and
+`enforce-char-based-input` still take precedence: the quick key cannot silently
+enable predictions. If it shows Off, enable the feature in Settings first.
+
+Custom `extra-keys` layouts remain authoritative. Add `'IME'` wherever the quick
+control should appear, or use the terminal's long-press → More menu's **Use
+predictive Text input / Use immediate Keys input** action. The key label reflects
+current state; its tap selects the other state. The Keyboard and New Session
+drawer actions and Shift behavior are independent of this control.
+
+Termux cannot see whether a Zellij pane is a shell, Vim command mode, or another
+TUI, nor does Zellij's mode reach the terminal input connection. Select Keys for
+immediate command letters, editor navigation, games and modal shortcuts; select
+Text when entering words. Ctrl+G is a convenience for this personal app's prefix,
+not automatic discovery of arbitrary remote bindings. For a different prefix,
+select Keys before the sequence. Disable the feature in Settings before secrets.
 
 The draft is limited to 4096 UTF-16 units. Oversized composition updates are
 rejected atomically; oversized ordinary commits are finalized rather than kept
@@ -111,9 +132,9 @@ must be checked on a physical device. No setting silently enables personalized
 learning. Predictions, glide input, voice input, and language-specific replacement
 protocols are compatibility expectations to verify, not guarantees for every IME.
 
-Full-screen applications using the alternate screen automatically use ordinary
-input. Disable predictions for games or other programs that require immediate
-letters while using the main terminal screen. Extra-key terminal controls remain
+Full-screen applications initially use immediate Keys input. An explicit Text
+choice inside a multiplexer also affects editors and other programs in its panes;
+return to Keys for programs that require immediate letters. Extra-key controls remain
 immediate after finalizing the draft, but buffering words changes the timing of
 ordinary letters. Editing already echoed words, reconverting earlier CJK text, fullscreen
 IME editors, handwriting cursor geometry, and correction of text already sent to

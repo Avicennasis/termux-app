@@ -224,6 +224,36 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     @Override
+    public boolean shouldPauseImeSuggestions() {
+        return !ImeInputMode.isText(mActivity.getCurrentSession());
+    }
+
+    @Override
+    public boolean shouldEnableImeSuggestionsInAlternateScreen() { return true; }
+
+    @Override
+    public void onTerminalCodePointSent(TerminalSession session, int codePoint, boolean altDown) {
+        if (shouldEnableImeSuggestions()
+                && ImeInputMode.onCodePointSent(session, codePoint, altDown))
+            mActivity.getTerminalView().updateImeInputMode();
+    }
+
+    @Override
+    public void onImeInputModeChanged() {
+        if (mActivity.getTermuxTerminalExtraKeys() != null)
+            mActivity.getTermuxTerminalExtraKeys().updateImeModeButtons();
+    }
+
+    public void toggleImeInputMode() {
+        if (!shouldEnableImeSuggestions() || shouldEnforceCharBasedInput()) {
+            mActivity.showToast(mActivity.getString(com.termux.R.string.termux_ime_mode_unavailable), true);
+            return;
+        }
+        ImeInputMode.toggle(mActivity.getCurrentSession());
+        mActivity.getTerminalView().updateImeInputMode();
+    }
+
+    @Override
     public boolean hasTerminalInputModifiers() {
         if (mVirtualControlKeyDown || mVirtualFnKeyDown) return true;
         ExtraKeysView extraKeys = mActivity.getExtraKeysView();
