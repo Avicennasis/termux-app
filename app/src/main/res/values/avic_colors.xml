@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="avic_canvas">#E8EBDD</color>
+    <color name="avic_surface">#F4F5EB</color>
+    <color name="avic_raised">#FAFBF5</color>
+    <color name="avic_text">#202D23</color>
+    <color name="avic_muted">#53634F</color>
+    <color name="avic_line">#7A8870</color>
+    <color name="avic_ripple">#66496B24</color>
+    <color name="avic_accent">#496B24</color>
+    <color name="avic_on_accent">#FFFFFF</color>
+    <color name="avic_selected">#DEEBCB</color>
+    <color name="avic_selected_line">#496B24</color>
+    <color name="avic_teal">#225F56</color>
+    <color name="avic_amber">#79571B</color>
+    <color name="avic_error">#AA372D</color>
+    <color name="avic_toolbar_surface">#101713</color>
+    <color name="avic_toolbar_text">#EAF0E4</color>
+    <color name="avic_toolbar_pressed">#3D4D39</color>
+    <color name="avic_toolbar_active">#FF9E91</color>
+    <color name="avic_toolbar_muted">#ACBDA1</color>
+</resources>

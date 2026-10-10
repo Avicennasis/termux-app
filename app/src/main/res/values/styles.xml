@@ -14,4 +14,43 @@
         <item name="android:textColor">@color/white</item>
     </style>
 
+    <style name="Widget.Avic.Drawer.SecondaryButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:minHeight">48dp</item>
+        <item name="android:insetTop">0dp</item><item name="android:insetBottom">0dp</item>
+        <item name="android:textAllCaps">false</item><item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/avic_teal</item>
+        <item name="android:paddingStart">12dp</item><item name="android:paddingEnd">12dp</item>
+        <item name="backgroundTint">@color/avic_raised</item><item name="strokeColor">@color/avic_line</item>
+        <item name="strokeWidth">1dp</item><item name="cornerRadius">12dp</item>
+        <item name="iconTint">@color/avic_teal</item><item name="iconSize">20dp</item>
+        <item name="iconGravity">textStart</item><item name="iconPadding">4dp</item>
+        <item name="rippleColor">@color/avic_selected</item>
+    </style>
+    <style name="Widget.Avic.Drawer.KeyboardButton" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:paddingTop">4dp</item><item name="android:paddingBottom">4dp</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:insetTop">0dp</item><item name="android:insetBottom">0dp</item>
+        <item name="android:textAllCaps">false</item><item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/avic_on_accent</item>
+        <item name="backgroundTint">@color/avic_accent</item><item name="strokeColor">@color/avic_on_accent</item>
+        <item name="strokeWidth">1dp</item><item name="cornerRadius">12dp</item>
+        <item name="iconTint">@color/avic_on_accent</item><item name="iconSize">24dp</item>
+        <item name="iconGravity">textStart</item><item name="iconPadding">12dp</item>
+        <item name="rippleColor">@color/avic_selected</item>
+    </style>
+    <style name="Widget.Avic.Toolbar" parent="Widget.MaterialComponents.Toolbar">
+        <item name="android:background">@color/avic_surface</item>
+        <item name="titleTextColor">@color/avic_text</item>
+        <item name="subtitleTextColor">@color/avic_muted</item>
+    </style>
+    <style name="ThemeOverlay.Avic.Dialog" parent="ThemeOverlay.BaseDialog.DayNight">
+        <item name="colorPrimary">@color/avic_accent</item>
+        <item name="colorOnPrimary">@color/avic_on_accent</item>
+        <item name="colorSurface">@color/avic_surface</item>
+        <item name="colorOnSurface">@color/avic_text</item>
+        <item name="android:textColorPrimary">@color/avic_text</item>
+        <item name="android:textColorSecondary">@color/avic_muted</item>
+    </style>
 </resources>

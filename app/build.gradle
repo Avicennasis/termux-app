@@ -42,11 +42,11 @@ android {
         applicationId "com.termuxavic"
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
-        def personalVersionCode = System.getenv("TERMUX_AVIC_VERSION_CODE") ?: "1007"
+        def personalVersionCode = System.getenv("TERMUX_AVIC_VERSION_CODE") ?: "1008"
         if (!(personalVersionCode ==~ /[1-9][0-9]{0,9}/) || personalVersionCode.toLong() > Integer.MAX_VALUE)
             throw new GradleException("TERMUX_AVIC_VERSION_CODE must be a positive Android version code")
         versionCode personalVersionCode.toInteger()
-        versionName "0.118.0-avic.8"
+        versionName "0.118.0-avic.9"
 
         if (appVersionName) versionName = appVersionName
         validateVersionName(versionName)

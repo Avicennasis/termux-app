@@ -2,16 +2,19 @@
 
     <Preference
         app:title="@string/termux_debugging_preferences_title"
+        app:icon="@drawable/ic_avic_bug_report"
         app:summary="@string/termux_debugging_preferences_summary"
         app:fragment="com.termux.app.fragments.settings.termux.DebuggingPreferencesFragment"/>
 
     <Preference
         app:title="@string/termux_terminal_io_preferences_title"
+        app:icon="@drawable/ic_avic_keyboard_settings"
         app:summary="@string/termux_terminal_io_preferences_summary"
         app:fragment="com.termux.app.fragments.settings.termux.TerminalIOPreferencesFragment"/>
 
     <Preference
         app:title="@string/termux_terminal_view_preferences_title"
+        app:icon="@drawable/ic_avic_palette"
         app:summary="@string/termux_terminal_view_preferences_summary"
         app:fragment="com.termux.app.fragments.settings.termux.TerminalViewPreferencesFragment"/>
 

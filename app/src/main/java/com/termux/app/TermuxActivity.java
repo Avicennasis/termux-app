@@ -16,6 +16,7 @@ import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Gravity;
 import android.view.Menu;
+import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -522,7 +523,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (savedInstanceState != null)
             mTermuxTerminalExtraKeys.setPageMode(savedInstanceState.getBoolean(ARG_TERMINAL_PAGE_MODE, false));
 
-        mExtraKeysDrawerListener = new ExtraKeysDrawerListener(getDrawer());
+        mExtraKeysDrawerListener = new ExtraKeysDrawerListener(getDrawer(), mTerminalView);
         getDrawer().addDrawerListener(mExtraKeysDrawerListener);
 
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
@@ -539,6 +540,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         terminalToolbarViewPager.setAdapter(new TerminalToolbarViewPager.PageAdapter(this, savedTextInput));
         terminalToolbarViewPager.addOnPageChangeListener(new TerminalToolbarViewPager.OnPageChangeListener(this, terminalToolbarViewPager));
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mExtraKeysDrawerListener != null && mExtraKeysDrawerListener.focusDrawerOnTab(event))
+            return true;
+        return super.dispatchKeyEvent(event);
     }
 
     private void setTerminalToolbarHeight() {

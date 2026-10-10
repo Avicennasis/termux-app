@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="avic_drawer_width">280dp</dimen>
+    <dimen name="avic_drawer_gutter">16dp</dimen>
+    <dimen name="avic_session_padding">28dp</dimen>
+    <dimen name="avic_control_height">48dp</dimen>
+    <dimen name="avic_keyboard_height">56dp</dimen>
+    <dimen name="avic_keyboard_safe_gap">40dp</dimen>
+</resources>

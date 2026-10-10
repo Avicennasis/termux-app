@@ -1,0 +1,5 @@
+<resources>
+    <dimen name="avic_drawer_width">320dp</dimen>
+    <dimen name="avic_drawer_gutter">24dp</dimen>
+    <dimen name="avic_session_padding">36dp</dimen>
+</resources>

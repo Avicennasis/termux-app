@@ -239,4 +239,12 @@
     <!-- Donate Preference -->
     <string name="donate_preference_title">Donate</string>
 
+    <string name="avic_drawer_brand">Termux-Avic</string>
+    <string name="avic_sessions_hint">Sessions · hold to rename</string>
+    <string name="avic_session_shell">Shell</string>
+    <string name="avic_session_current">Current session</string>
+    <string name="avic_session_running">Running</string>
+    <string name="avic_session_exited">Exited · status %1$d</string>
+    <string name="avic_session_accessibility">Session %1$d. %2$s. %3$s</string>
+    <string name="avic_buffered_input_hint">Type here, then tap Send</string>
 </resources>

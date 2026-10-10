@@ -1,0 +1,2 @@
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/avic_session_card"
+    android:insetLeft="@dimen/avic_drawer_gutter" android:insetRight="@dimen/avic_drawer_gutter" android:insetTop="4dp" android:insetBottom="4dp" />

@@ -1,0 +1,16 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="72dp"
+    android:paddingStart="@dimen/avic_drawer_gutter" android:paddingEnd="@dimen/avic_drawer_gutter" android:paddingTop="12dp" android:paddingBottom="12dp"
+    android:orientation="horizontal" android:gravity="center_vertical">
+    <androidx.appcompat.widget.AppCompatImageView android:layout_width="40dp" android:layout_height="40dp"
+        android:background="@drawable/avic_brand_tile" android:padding="8dp" android:src="@drawable/ic_service_notification"
+        android:importantForAccessibility="no" app:tint="@color/avic_accent" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:paddingStart="12dp" android:orientation="vertical">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/avic_drawer_brand" android:textColor="@color/avic_text" android:textSize="18sp"
+            android:fontFamily="sans-serif-medium" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/avic_sessions_hint" android:textColor="@color/avic_muted" android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

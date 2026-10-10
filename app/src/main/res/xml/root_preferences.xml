@@ -2,6 +2,7 @@
 
     <Preference
         app:key="termux"
+        app:icon="@drawable/ic_avic_tune"
         app:title="@string/termux_preferences_title"
         app:summary="@string/termux_preferences_summary"
         app:fragment="com.termux.app.fragments.settings.TermuxPreferencesFragment"/>
@@ -36,6 +37,7 @@
 
     <Preference
         app:key="about"
+        app:icon="@drawable/ic_avic_info"
         app:title="@string/about_preference_title"
         app:persistent="false"/>
     <!-- app:layout="@layout/preference_markdown_text" -->

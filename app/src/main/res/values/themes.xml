@@ -1,49 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!--
-     https://material.io/develop/android/theming/dark
-    -->
-
-    <!-- TermuxApp Light DarkActionBar theme. -->
-    <style name="Theme.TermuxApp.Light.DarkActionBar" parent="Theme.BaseActivity.Light.DarkActionBar"/>
-    <!-- TermuxApp Light NoActionBar theme. -->
-    <style name="Theme.TermuxApp.Light.NoActionBar" parent="Theme.BaseActivity.Light.NoActionBar"/>
-
-    <!-- TermuxApp DayNight DarkActionBar theme. -->
-    <style name="Theme.TermuxApp.DayNight.DarkActionBar" parent="Theme.BaseActivity.DayNight.DarkActionBar"/>
-    <!-- TermuxApp DayNight NoActionBar theme. -->
-    <style name="Theme.TermuxApp.DayNight.NoActionBar" parent="Theme.BaseActivity.DayNight.NoActionBar"/>
-
-
-    <!-- TermuxActivity DayNight NoActionBar theme. -->
+    <style name="Theme.TermuxApp.Light.DarkActionBar" parent="Theme.BaseActivity.Light.DarkActionBar">
+        <item name="colorPrimary">@color/avic_accent</item>
+        <item name="colorPrimaryVariant">@color/avic_surface</item>
+        <item name="colorPrimaryDark">@color/avic_surface</item>
+        <item name="colorOnPrimary">@color/avic_on_accent</item>
+        <item name="colorSecondary">@color/avic_teal</item>
+        <item name="colorSecondaryVariant">@color/avic_teal</item>
+        <item name="colorOnSecondary">@color/avic_on_accent</item>
+        <item name="colorSurface">@color/avic_surface</item>
+        <item name="colorOnSurface">@color/avic_text</item>
+        <item name="colorOnBackground">@color/avic_text</item>
+        <item name="android:colorBackground">@color/avic_canvas</item>
+        <item name="android:windowBackground">@color/avic_canvas</item>
+        <item name="android:textColorPrimary">@color/avic_text</item>
+        <item name="android:textColorSecondary">@color/avic_muted</item>
+        <item name="android:textColorLink">@color/avic_teal</item>
+        <item name="android:colorAccent">@color/avic_accent</item>
+        <item name="android:windowLightStatusBar">@bool/avic_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/avic_light_system_bars</item>
+        <item name="android:statusBarColor">@color/avic_surface</item>
+        <item name="android:navigationBarColor">@color/avic_surface</item>
+        <item name="toolbarStyle">@style/Widget.Avic.Toolbar</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.Avic.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Avic.Dialog</item>
+    </style>
+    <style name="Theme.TermuxApp.Light.NoActionBar" parent="Theme.TermuxApp.Light.DarkActionBar">
+        <item name="windowActionBar">false</item><item name="windowNoTitle">true</item>
+    </style>
+    <style name="Theme.TermuxApp.DayNight.DarkActionBar" parent="Theme.BaseActivity.DayNight.DarkActionBar">
+        <item name="colorPrimary">@color/avic_accent</item>
+        <item name="colorPrimaryVariant">@color/avic_surface</item>
+        <item name="colorPrimaryDark">@color/avic_surface</item>
+        <item name="colorOnPrimary">@color/avic_on_accent</item>
+        <item name="colorSecondary">@color/avic_teal</item>
+        <item name="colorSecondaryVariant">@color/avic_teal</item>
+        <item name="colorOnSecondary">@color/avic_on_accent</item>
+        <item name="colorSurface">@color/avic_surface</item>
+        <item name="colorOnSurface">@color/avic_text</item>
+        <item name="colorOnBackground">@color/avic_text</item>
+        <item name="android:colorBackground">@color/avic_canvas</item>
+        <item name="android:windowBackground">@color/avic_canvas</item>
+        <item name="android:textColorPrimary">@color/avic_text</item>
+        <item name="android:textColorSecondary">@color/avic_muted</item>
+        <item name="android:textColorLink">@color/avic_teal</item>
+        <item name="android:colorAccent">@color/avic_accent</item>
+        <item name="android:windowLightStatusBar">@bool/avic_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/avic_light_system_bars</item>
+        <item name="android:statusBarColor">@color/avic_surface</item>
+        <item name="android:navigationBarColor">@color/avic_surface</item>
+        <item name="toolbarStyle">@style/Widget.Avic.Toolbar</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.Avic.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Avic.Dialog</item>
+    </style>
+    <style name="Theme.TermuxApp.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.DarkActionBar">
+        <item name="windowActionBar">false</item><item name="windowNoTitle">true</item>
+    </style>
     <style name="Theme.TermuxActivity.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/black</item>
-        <item name="colorPrimaryVariant">@color/black</item>
-
+        <!-- Terminal palette and user properties still control terminal content. -->
         <item name="android:windowBackground">@color/black</item>
-
-        <!-- Avoid action mode toolbar pushing down terminal content when
-             selecting text on pre-6.0 (non-floating toolbar). -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
-
         <item name="android:windowTranslucentStatus">true</item>
         <item name="android:windowTranslucentNavigation">true</item>
-
-        <!-- https://developer.android.com/training/tv/start/start.html#transition-color -->
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
-
-        <!-- Left drawer. -->
-        <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Light</item>
-        <item name="termuxActivityDrawerBackground">@color/white</item>
-        <item name="termuxActivityDrawerImageTint">@color/black</item>
-
-        <!-- Extra keys colors. -->
-        <item name="extraKeysButtonTextColor">@color/white</item>
-        <item name="extraKeysButtonActiveTextColor">@color/red_400</item>
-        <item name="extraKeysButtonBackgroundColor">@color/black</item>
-        <item name="extraKeysButtonActiveBackgroundColor">@color/grey_500</item>
+        <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Dark</item>
+        <item name="termuxActivityDrawerBackground">@color/avic_surface</item>
+        <item name="termuxActivityDrawerImageTint">@color/avic_text</item>
+        <item name="extraKeysButtonTextColor">@color/avic_toolbar_text</item>
+        <item name="extraKeysButtonActiveTextColor">@color/avic_toolbar_active</item>
+        <item name="extraKeysButtonBackgroundColor">@color/avic_toolbar_surface</item>
+        <item name="extraKeysButtonActiveBackgroundColor">@color/avic_toolbar_pressed</item>
     </style>
-
 </resources>
