@@ -53,6 +53,10 @@
     <string name="action_create_named_session_confirm">Create</string>
 
     <string name="action_toggle_soft_keyboard">Keyboard</string>
+    <string name="extra_keys_page_on">Page mode on. Tap to restore arrow keys.</string>
+    <string name="extra_keys_page_off">Page mode off. Tap to use arrows for Page Up and Page Down.</string>
+    <string name="extra_keys_page_up">Page Up</string>
+    <string name="extra_keys_page_down">Page Down</string>
 
     <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
     <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>

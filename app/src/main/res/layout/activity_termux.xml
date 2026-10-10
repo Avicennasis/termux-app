@@ -62,16 +62,6 @@
                         app:tint="?attr/termuxActivityDrawerImageTint" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/toggle_keyboard_button"
-                        style="?android:attr/buttonBarButtonStyle"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:paddingStart="4dp"
-                        android:paddingEnd="4dp"
-                        android:text="@string/action_toggle_soft_keyboard" />
-
-                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/new_session_button"
                         style="?android:attr/buttonBarButtonStyle"
                         android:layout_width="0dp"
@@ -90,6 +80,24 @@
                     android:layout_weight="1"
                     android:choiceMode="singleChoice"
                     android:longClickable="true" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/toggle_keyboard_button"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:layout_marginHorizontal="12dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:textColor="?attr/termuxActivityDrawerImageTint"
+                    app:backgroundTint="?attr/colorSurface"
+                    app:strokeColor="?attr/termuxActivityDrawerImageTint"
+                    app:strokeWidth="1dp"
+                    android:text="@string/action_toggle_soft_keyboard" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp" />
             </LinearLayout>
 
         </androidx.drawerlayout.widget.DrawerLayout>

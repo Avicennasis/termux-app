@@ -5,6 +5,7 @@ import android.content.Context;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.AttributeSet;
 
@@ -207,6 +208,9 @@ public final class ExtraKeysView extends GridLayout {
     protected Handler mHandler;
     protected SpecialButtonsLongHoldRunnable mSpecialButtonsLongHoldRunnable;
     protected int mLongPressCount;
+    private boolean mInputEnabled = true;
+    private boolean mIgnoreTouchUntilDown;
+    private int mRepeatGeneration;
 
 
     public ExtraKeysView(Context context, AttributeSet attrs) {
@@ -223,6 +227,39 @@ public final class ExtraKeysView extends GridLayout {
 
         setLongPressTimeout(ViewConfiguration.getLongPressTimeout());
         setLongPressRepeatDelay(DEFAULT_LONG_PRESS_REPEAT_DELAY);
+    }
+
+    public boolean isInputEnabled() {
+        return mInputEnabled;
+    }
+
+    /** Cancel active presses and repeats when an overlapping UI takes ownership of input. */
+    public void setInputEnabled(boolean enabled) {
+        if (mInputEnabled == enabled) return;
+        mInputEnabled = enabled;
+        if (!enabled) {
+            mIgnoreTouchUntilDown = true;
+            long now = SystemClock.uptimeMillis();
+            MotionEvent cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0, 0, 0);
+            super.dispatchTouchEvent(cancel);
+            cancel.recycle();
+            stopScheduledExecutors();
+            if (mPopupWindow != null) dismissPopup();
+        }
+        setAlpha(enabled ? 1f : 0.35f);
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+            child.setEnabled(enabled);
+            if (!enabled) child.setBackgroundColor(mButtonBackgroundColor);
+        }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (!mInputEnabled) return true;
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) mIgnoreTouchUntilDown = false;
+        if (mIgnoreTouchUntilDown) return true;
+        return super.dispatchTouchEvent(event);
     }
 
 
@@ -387,6 +424,9 @@ public final class ExtraKeysView extends GridLayout {
         if (extraKeysInfo == null)
             return;
 
+        stopScheduledExecutors();
+        if (mPopupWindow != null) dismissPopup();
+
         for(SpecialButtonState state : mSpecialButtons.values())
             state.buttons = new ArrayList<>();
 
@@ -415,11 +455,13 @@ public final class ExtraKeysView extends GridLayout {
                 button.setPadding(0, 0, 0, 0);
 
                 button.setOnClickListener(view -> {
+                    if (!mInputEnabled) return;
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
                     onAnyExtraKeyButtonClick(view, buttonInfo, button);
                 });
 
                 button.setOnTouchListener((view, event) -> {
+                    if (!mInputEnabled) return true;
                     switch (event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
                             view.setBackgroundColor(mButtonActiveBackgroundColor);
@@ -482,6 +524,7 @@ public final class ExtraKeysView extends GridLayout {
                 button.setLayoutParams(param);
 
                 addView(button);
+                button.setEnabled(mInputEnabled);
             }
         }
     }
@@ -489,6 +532,7 @@ public final class ExtraKeysView extends GridLayout {
 
 
     public void onExtraKeyButtonClick(View view, ExtraKeyButton buttonInfo, MaterialButton button) {
+        if (!mInputEnabled) return;
         if (mExtraKeysViewClient != null)
             mExtraKeysViewClient.onExtraKeyButtonClick(view, buttonInfo, button);
     }
@@ -517,6 +561,7 @@ public final class ExtraKeysView extends GridLayout {
 
 
     public void onAnyExtraKeyButtonClick(View view, @NonNull ExtraKeyButton buttonInfo, MaterialButton button) {
+        if (!mInputEnabled) return;
         if (isSpecialButton(buttonInfo)) {
             if (mLongPressCount > 0) return;
             SpecialButtonState state = mSpecialButtons.get(SpecialButton.valueOf(buttonInfo.getKey()));
@@ -534,14 +579,22 @@ public final class ExtraKeysView extends GridLayout {
 
     public void startScheduledExecutors(View view, ExtraKeyButton buttonInfo, MaterialButton button) {
         stopScheduledExecutors();
+        if (!mInputEnabled) return;
         mLongPressCount = 0;
         if (mRepetitiveKeys.contains(buttonInfo.getKey())) {
             // Auto repeat key if long pressed until ACTION_UP stops it by calling stopScheduledExecutors.
             // Currently, only one (last) repeat key can run at a time. Old ones are stopped.
             mScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+            if (mHandler == null) mHandler = new Handler(Looper.getMainLooper());
+            final int generation = mRepeatGeneration;
             mScheduledExecutor.scheduleWithFixedDelay(() -> {
-                mLongPressCount++;
-                onExtraKeyButtonClick(view, buttonInfo, button);
+                // Serialize repeat input with UI state changes; canceled queued repeats must
+                // not fire later when the drawer has closed and input is enabled again.
+                mHandler.post(() -> {
+                    if (!mInputEnabled || generation != mRepeatGeneration) return;
+                    mLongPressCount++;
+                    onExtraKeyButtonClick(view, buttonInfo, button);
+                });
             }, mLongPressTimeout, mLongPressRepeatDelay, TimeUnit.MILLISECONDS);
         } else if (isSpecialButton(buttonInfo)) {
             // Lock the key if long pressed by running mSpecialButtonsLongHoldRunnable after
@@ -558,6 +611,7 @@ public final class ExtraKeysView extends GridLayout {
     }
 
     public void stopScheduledExecutors() {
+        mRepeatGeneration++;
         if (mScheduledExecutor != null) {
             mScheduledExecutor.shutdownNow();
             mScheduledExecutor = null;
@@ -577,6 +631,7 @@ public final class ExtraKeysView extends GridLayout {
         }
 
         public void run() {
+            if (!mInputEnabled) return;
             // Toggle active and lock state
             mState.setIsLocked(!mState.isActive);
             mState.setIsActive(!mState.isActive);
@@ -664,6 +719,13 @@ public final class ExtraKeysView extends GridLayout {
             state.buttons.add(button);
         }
         return button;
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        stopScheduledExecutors();
+        if (mPopupWindow != null) dismissPopup();
+        super.onDetachedFromWindow();
     }
 
 
