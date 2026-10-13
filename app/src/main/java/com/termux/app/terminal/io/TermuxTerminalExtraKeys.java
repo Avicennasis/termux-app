@@ -27,6 +27,7 @@ import org.json.JSONException;
 public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
 
     private ExtraKeysInfo mExtraKeysInfo;
+    private boolean mPageMode;
 
     final TermuxActivity mActivity;
     final TermuxTerminalViewClient mTermuxTerminalViewClient;
@@ -85,6 +86,54 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         return mExtraKeysInfo;
     }
 
+    public boolean isPageMode() {
+        return mPageMode;
+    }
+
+    public void setPageMode(boolean enabled) {
+        mPageMode = enabled;
+        updatePageModeButtons();
+    }
+
+    /** PAGE is a persistent toggle, independent of the one-shot terminal modifiers. */
+    public void updatePageModeButtons() {
+        ExtraKeysView keys = mActivity.getExtraKeysView();
+        if (keys == null || mExtraKeysInfo == null) return;
+        int gold = mActivity.getResources().getColor(R.color.extra_keys_page_arrow);
+        int index = 0;
+        for (ExtraKeyButton[] row : mExtraKeysInfo.getMatrix()) {
+            for (ExtraKeyButton info : row) {
+                View child = keys.getChildAt(index++);
+                if (info.isMacro() || !(child instanceof MaterialButton)) continue;
+                MaterialButton button = (MaterialButton) child;
+                String key = info.getKey();
+                if ("PAGE".equals(key)) {
+                    button.setTextColor(mPageMode ? keys.getButtonActiveTextColor() : keys.getButtonTextColor());
+                    button.setSelected(mPageMode);
+                    button.setContentDescription(mActivity.getString(mPageMode
+                        ? R.string.extra_keys_page_on : R.string.extra_keys_page_off));
+                } else if ("UP".equals(key) || "DOWN".equals(key)) {
+                    button.setTextColor(mPageMode ? gold : keys.getButtonTextColor());
+                    button.setContentDescription(mPageMode ? mActivity.getString("UP".equals(key)
+                        ? R.string.extra_keys_page_up : R.string.extra_keys_page_down) : info.getDisplay());
+                } else if ("KEYBOARD".equals(key)) {
+                    button.setContentDescription(mActivity.getString(R.string.action_toggle_soft_keyboard));
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onExtraKeyButtonClick(View view, ExtraKeyButton info, MaterialButton button) {
+        // Remap the visible arrow buttons, leaving explicit custom macros unchanged.
+        if (mPageMode && !info.isMacro() && ("UP".equals(info.getKey()) || "DOWN".equals(info.getKey()))) {
+            super.onTerminalExtraKeyButtonClick(view, "UP".equals(info.getKey()) ? "PGUP" : "PGDN",
+                false, false, false, false);
+        } else {
+            super.onExtraKeyButtonClick(view, info, button);
+        }
+    }
+
     /** Keep the IME key's label in sync without reloading or clearing modifier buttons. */
     public void updateImeModeButtons() {
         ExtraKeysView keys = mActivity.getExtraKeysView();
@@ -111,7 +160,9 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     @SuppressLint("RtlHardcoded")
     @Override
     public void onTerminalExtraKeyButtonClick(View view, String key, boolean ctrlDown, boolean altDown, boolean shiftDown, boolean fnDown) {
-        if ("IME".equals(key)) {
+        if ("PAGE".equals(key)) {
+            setPageMode(!mPageMode);
+        } else if ("IME".equals(key)) {
             if (mTermuxTerminalViewClient != null) mTermuxTerminalViewClient.toggleImeInputMode();
         } else if ("KEYBOARD".equals(key)) {
             if(mTermuxTerminalViewClient != null)

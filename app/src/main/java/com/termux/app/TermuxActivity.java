@@ -31,6 +31,7 @@ import com.termux.app.api.file.FileReceiverActivity;
 import com.termux.app.terminal.TermuxActivityRootView;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
+import com.termux.app.terminal.io.ExtraKeysDrawerListener;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.activity.ActivityUtils;
 import com.termux.shared.activity.media.AppCompatActivityUtils;
@@ -174,6 +175,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int mNavBarHeight;
 
     private float mTerminalToolbarDefaultHeight;
+    private ExtraKeysDrawerListener mExtraKeysDrawerListener;
 
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
@@ -191,6 +193,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_IME_MODE_ID = 12;
 
     private static final String ARG_TERMINAL_TOOLBAR_TEXT_INPUT = "terminal_toolbar_text_input";
+    private static final String ARG_TERMINAL_PAGE_MODE = "terminal_page_mode";
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
 
     private static final String LOG_TAG = "TermuxActivity";
@@ -375,6 +378,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         super.onSaveInstanceState(savedInstanceState);
         saveTerminalToolbarTextInput(savedInstanceState);
+        if (mTermuxTerminalExtraKeys != null)
+            savedInstanceState.putBoolean(ARG_TERMINAL_PAGE_MODE, mTermuxTerminalExtraKeys.isPageMode());
         savedInstanceState.putBoolean(ARG_ACTIVITY_RECREATED, true);
     }
 
@@ -514,6 +519,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setTerminalToolbarView(Bundle savedInstanceState) {
         mTermuxTerminalExtraKeys = new TermuxTerminalExtraKeys(this, mTerminalView,
             mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient);
+        if (savedInstanceState != null)
+            mTermuxTerminalExtraKeys.setPageMode(savedInstanceState.getBoolean(ARG_TERMINAL_PAGE_MODE, false));
+
+        mExtraKeysDrawerListener = new ExtraKeysDrawerListener(getDrawer());
+        getDrawer().addDrawerListener(mExtraKeysDrawerListener);
 
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         if (mPreferences.shouldShowTerminalToolbar()) terminalToolbarViewPager.setVisibility(View.VISIBLE);
@@ -843,6 +853,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void setExtraKeysView(ExtraKeysView extraKeysView) {
         mExtraKeysView = extraKeysView;
+        if (mExtraKeysDrawerListener != null)
+            mExtraKeysDrawerListener.setExtraKeysView(extraKeysView);
     }
 
     public DrawerLayout getDrawer() {
@@ -985,6 +997,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
                 mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
                 mTermuxTerminalExtraKeys.updateImeModeButtons();
+                mTermuxTerminalExtraKeys.updatePageModeButtons();
             }
 
             // Update NightMode.APP_NIGHT_MODE

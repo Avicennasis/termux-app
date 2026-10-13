@@ -50,6 +50,7 @@ public class TerminalToolbarViewPager {
                 extraKeysView.reload(mActivity.getTermuxTerminalExtraKeys().getExtraKeysInfo(),
                     mActivity.getTerminalToolbarDefaultHeight());
                 mActivity.getTermuxTerminalExtraKeys().updateImeModeButtons();
+                mActivity.getTermuxTerminalExtraKeys().updatePageModeButtons();
 
                 // apply extra keys fix if enabled in prefs
                 if (mActivity.getProperties().isUsingFullScreen() && mActivity.getProperties().isUsingFullScreenWorkAround()) {
