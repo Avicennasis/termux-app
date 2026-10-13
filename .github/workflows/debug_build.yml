@@ -87,6 +87,7 @@ jobs:
       - name: Attach universal APK file
         uses: actions/upload-artifact@v6
         with:
+          retention-days: 7
           name: ${{ env.APK_BASENAME_PREFIX }}_universal
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_universal.apk
@@ -95,6 +96,7 @@ jobs:
       - name: Attach arm64-v8a APK file
         uses: actions/upload-artifact@v6
         with:
+          retention-days: 7
           name: ${{ env.APK_BASENAME_PREFIX }}_arm64-v8a
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_arm64-v8a.apk
@@ -103,6 +105,7 @@ jobs:
       - name: Attach armeabi-v7a APK file
         uses: actions/upload-artifact@v6
         with:
+          retention-days: 7
           name: ${{ env.APK_BASENAME_PREFIX }}_armeabi-v7a
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_armeabi-v7a.apk
@@ -111,6 +114,7 @@ jobs:
       - name: Attach x86_64 APK file
         uses: actions/upload-artifact@v6
         with:
+          retention-days: 7
           name: ${{ env.APK_BASENAME_PREFIX }}_x86_64
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_x86_64.apk
@@ -119,6 +123,7 @@ jobs:
       - name: Attach x86 APK file
         uses: actions/upload-artifact@v6
         with:
+          retention-days: 7
           name: ${{ env.APK_BASENAME_PREFIX }}_x86
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_x86.apk
@@ -127,6 +132,7 @@ jobs:
       - name: Attach sha256sums file
         uses: actions/upload-artifact@v6
         with:
+          retention-days: 7
           name: ${{ env.APK_BASENAME_PREFIX }}_sha256sums
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_sha256sums
