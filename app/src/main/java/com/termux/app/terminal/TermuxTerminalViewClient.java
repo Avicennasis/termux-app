@@ -26,6 +26,7 @@ import com.termux.shared.shell.ShellUtils;
 import com.termux.shared.termux.TermuxBootstrap;
 import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
 import com.termux.shared.termux.extrakeys.SpecialButton;
+import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.android.AndroidUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.activities.ReportActivity;
@@ -138,6 +139,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      */
     public void onReloadProperties() {
         setSessionShortcuts();
+        mActivity.getTerminalView().updateImeInputMode();
     }
 
     /**
@@ -214,6 +216,22 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     @Override
     public boolean shouldEnforceCharBasedInput() {
         return mActivity.getProperties().isEnforcingCharBasedInput();
+    }
+
+    @Override
+    public boolean shouldEnableImeSuggestions() {
+        return mActivity.getProperties().isTerminalImeSuggestionsEnabled();
+    }
+
+    @Override
+    public boolean hasTerminalInputModifiers() {
+        if (mVirtualControlKeyDown || mVirtualFnKeyDown) return true;
+        ExtraKeysView extraKeys = mActivity.getExtraKeysView();
+        if (extraKeys == null) return false;
+        return Boolean.TRUE.equals(extraKeys.readSpecialButton(SpecialButton.CTRL, false))
+            || Boolean.TRUE.equals(extraKeys.readSpecialButton(SpecialButton.ALT, false))
+            || Boolean.TRUE.equals(extraKeys.readSpecialButton(SpecialButton.SHIFT, false))
+            || Boolean.TRUE.equals(extraKeys.readSpecialButton(SpecialButton.FN, false));
     }
 
     @Override
@@ -795,8 +813,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         if (!session.isRunning()) return;
 
         String text = ShareUtils.getTextStringFromClipboardIfSet(mActivity, true);
-        if (text != null)
+        if (text != null) {
+            mActivity.getTerminalView().finishImeInput();
             session.getEmulator().paste(text);
+        }
     }
 
 }

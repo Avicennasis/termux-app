@@ -8,6 +8,10 @@ page_ref: /docs/apps/termux/index.html
 
 Welcome to documentation for the [Termux App].
 
+Experimental terminal settings:
+
+- [Predictive keyboard input](terminal-ime-suggestions.md)
+
 ##
 
 [Termux App]: https://github.com/termux/termux-app

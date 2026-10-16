@@ -28,6 +28,10 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+
     publishing {
         multipleVariants {
             withSourcesJar()
@@ -39,6 +43,12 @@ android {
 
 dependencies {
     testImplementation "junit:junit:4.13.2"
+    testImplementation "org.robolectric:robolectric:4.17"
+}
+
+tasks.withType(Test).configureEach {
+    // Android 16 ApplicationSharedMemory uses FileDescriptor internals in Robolectric.
+    jvmArgs '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED'
 }
 
 task sourceJar(type: Jar) {
@@ -60,4 +70,3 @@ afterEvaluate {
         }
     }
 }
-

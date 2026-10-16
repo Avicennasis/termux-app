@@ -32,6 +32,16 @@ public interface TerminalViewClient {
 
     boolean shouldEnforceCharBasedInput();
 
+    /** Opt-in local word editing for predictive IMEs. Character-based input takes precedence. */
+    default boolean shouldEnableImeSuggestions() {
+        return false;
+    }
+
+    /** Peek at terminal modifiers without consuming one-shot extra-key state. */
+    default boolean hasTerminalInputModifiers() {
+        return false;
+    }
+
     boolean shouldUseCtrlSpaceWorkaround();
 
     boolean isTerminalViewSelected();

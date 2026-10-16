@@ -52,6 +52,9 @@ public class TerminalExtraKeys implements ExtraKeysView.IExtraKeysView {
     }
 
     protected void onTerminalExtraKeyButtonClick(View view, String key, boolean ctrlDown, boolean altDown, boolean shiftDown, boolean fnDown) {
+        // Literal macros on Android < 7 write directly to the session too. Finalize the local
+        // IME draft before every extra-key action, without consuming its modifier buttons.
+        mTerminalView.finishImeInput();
         if (PRIMARY_KEY_CODES_FOR_STRINGS.containsKey(key)) {
             Integer keyCode = PRIMARY_KEY_CODES_FOR_STRINGS.get(key);
             if (keyCode == null) return;
